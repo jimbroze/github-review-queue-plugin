@@ -7,6 +7,7 @@ import io.github.jimdickinson.reviewqueue.queue.ReviewRequest
 import io.github.jimdickinson.reviewqueue.queue.ReviewRequestsResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -17,14 +18,20 @@ class GitHubReviewSourceTest {
 
     @Test
     fun `searches GitHub for open pull requests in unarchived repositories awaiting your review`() {
-        val graphQl = FakeGitHubGraphQl(reviewQueueResponse(you, yourTeams))
+        val graphQl = fakeGitHub()
 
         runBlocking { GitHubReviewSource(graphQl).fetchReviewRequests() }
 
-        assertEquals(
-            "is:pr is:open archived:false review-requested:@me",
-            graphQl.receivedVariables.single()["searchQuery"],
-        )
+        assertTrue(graphQl.receivedVariables.any { "is:pr is:open archived:false review-requested:@me" in it.values })
+    }
+
+    @Test
+    fun `your teams are looked up by your login`() {
+        val graphQl = fakeGitHub()
+
+        runBlocking { GitHubReviewSource(graphQl).fetchReviewRequests() }
+
+        assertTrue(graphQl.receivedVariables.last().containsValue(you))
     }
 
     @Test
@@ -172,9 +179,12 @@ class GitHubReviewSourceTest {
     private fun requestedFromYou() = reviewRequested("2026-01-02T10:00:00Z", user(you))
 
     private fun fetch(vararg pullRequests: String): ReviewRequestsResult {
-        val graphQl = FakeGitHubGraphQl(reviewQueueResponse(you, yourTeams, *pullRequests))
+        val graphQl = fakeGitHub(*pullRequests)
         return runBlocking { GitHubReviewSource(graphQl).fetchReviewRequests() }
     }
+
+    private fun fakeGitHub(vararg pullRequests: String) =
+        FakeGitHubGraphQl(viewerResponse(you), reviewQueueResponse(yourTeams, *pullRequests))
 
     private fun fetchSingle(pullRequest: String): ReviewRequest =
         (fetch(pullRequest) as ReviewRequestsResult.Success).requests.single()

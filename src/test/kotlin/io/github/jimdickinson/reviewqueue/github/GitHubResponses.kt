@@ -1,19 +1,21 @@
 package io.github.jimdickinson.reviewqueue.github
 
-class FakeGitHubGraphQl(private val response: String) : GitHubGraphQl {
+class FakeGitHubGraphQl(vararg responsesInOrder: String) : GitHubGraphQl {
+    private val responses = ArrayDeque(responsesInOrder.toList())
     val receivedVariables = mutableListOf<Map<String, Any?>>()
 
     override suspend fun query(query: String, variables: Map<String, Any?>): String {
         receivedVariables += variables
-        return response
+        return responses.removeFirst()
     }
 }
 
-fun reviewQueueResponse(viewerLogin: String, viewerTeams: List<String>, vararg pullRequests: String) = """
+fun viewerResponse(login: String) = """{ "data": { "viewer": { "login": "$login" } } }"""
+
+fun reviewQueueResponse(viewerTeams: List<String>, vararg pullRequests: String) = """
     {
       "data": {
         "viewer": {
-          "login": "$viewerLogin",
           "organizations": {
             "nodes": [
               { "teams": { "nodes": [${viewerTeams.joinToString { """{ "combinedSlug": "$it" }""" }}] } }
