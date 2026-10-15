@@ -1,5 +1,9 @@
 package io.github.jimdickinson.reviewqueue.github
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+
 class FakeGitHubGraphQl(vararg responsesInOrder: GraphQlResponse) : GitHubGraphQl {
     private val responses = ArrayDeque(responsesInOrder.toList())
     val receivedVariables = mutableListOf<Map<String, Any?>>()
@@ -17,13 +21,18 @@ fun viewerResponse(login: String) = """{ "data": { "viewer": { "login": "$login"
 fun errorResponse(type: String, message: String) =
     """{ "data": null, "errors": [{ "type": "$type", "message": "$message" }] }"""
 
-fun reviewQueueResponse(viewerTeams: List<String>, vararg pullRequests: String) = """
+fun withError(response: String, type: String, message: String): String {
+    val error = Json.parseToJsonElement("""[{ "type": "$type", "message": "$message" }]""")
+    return JsonObject(Json.parseToJsonElement(response).jsonObject + ("errors" to error)).toString()
+}
+
+fun reviewQueueResponse(viewerTeams: List<String>, vararg pullRequests: String, hiddenOrganisations: Int = 0) = """
     {
       "data": {
         "viewer": {
           "organizations": {
             "nodes": [
-              { "teams": { "nodes": [${viewerTeams.joinToString { """{ "combinedSlug": "$it" }""" }}] } }
+              ${"null, ".repeat(hiddenOrganisations)}{ "teams": { "nodes": [${viewerTeams.joinToString { """{ "combinedSlug": "$it" }""" }}] } }
             ]
           }
         },

@@ -1,5 +1,6 @@
 package io.github.jimdickinson.reviewqueue.github
 
+import io.github.jimdickinson.reviewqueue.queue.RequestedReviewer
 import io.github.jimdickinson.reviewqueue.queue.ReviewRequestsResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -64,6 +65,31 @@ class GitHubReviewSourceFailuresTest {
         val result = fetch(GraphQlResponse.Body("<html>Unicorn!</html>"))
 
         assertTrue(result is ReviewRequestsResult.Failed)
+    }
+
+    @Test
+    fun `an error alongside data that came back still shows the pull requests that came back`() {
+        val partialQueue = withError(
+            reviewQueueResponse(
+                listOf("acme/platform"),
+                pullRequest(timeline = listOf(reviewRequested("2026-01-02T10:00:00Z", team("acme/platform")))),
+                hiddenOrganisations = 1,
+            ),
+            type = "FORBIDDEN",
+            message = "Resource protected by organization SAML enforcement.",
+        )
+
+        val result = fetch(viewer, GraphQlResponse.Body(partialQueue))
+
+        val requestedReviewers = (result as ReviewRequestsResult.Success).requests.map { it.requestedReviewer }
+        assertEquals(listOf(RequestedReviewer.Team("acme/platform")), requestedReviewers)
+    }
+
+    @Test
+    fun `a rate limit error alongside data that came back is still reported as rate limited`() {
+        val partialQueue = withError(reviewQueueResponse(emptyList()), type = "RATE_LIMITED", message = "API rate limit exceeded")
+
+        assertEquals(ReviewRequestsResult.RateLimited(resetAt = null), fetch(viewer, GraphQlResponse.Body(partialQueue)))
     }
 
     private fun fetch(vararg responses: GraphQlResponse): ReviewRequestsResult =
