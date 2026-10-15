@@ -12,6 +12,9 @@ sealed interface ReviewQueueState {
     data class CouldNotLoad(val reason: String) : ReviewQueueState
 }
 
+val ReviewQueueState.isFetching: Boolean
+    get() = this is ReviewQueueState.Loading || (this is ReviewQueueState.Showing && isRefreshing)
+
 data class ReviewRow(
     val pullRequestLabel: String,
     val title: String,
