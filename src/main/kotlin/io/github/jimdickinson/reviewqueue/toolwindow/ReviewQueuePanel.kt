@@ -9,8 +9,8 @@ import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.SimpleToolWindowPanel
-import com.intellij.ui.ClickListener
 import com.intellij.ui.CollectionListModel
+import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
@@ -26,7 +26,10 @@ class ReviewQueuePanel(
     private val onOpenGitHubSettings: () -> Unit,
 ) : SimpleToolWindowPanel(true, true) {
     private val rows = CollectionListModel<ReviewRow>()
-    private val list = JBList(rows).apply { cellRenderer = ReviewRowRenderer() }
+    private val list = JBList(rows).apply {
+        cellRenderer = ReviewRowRenderer()
+        fitRowsToVisibleWidth()
+    }
     private val loadingPanel = JBLoadingPanel(BorderLayout(), parentDisposable)
     private var isFetching = false
 
@@ -34,7 +37,7 @@ class ReviewQueuePanel(
         loadingPanel.add(ScrollPaneFactory.createScrollPane(list, true))
         setContent(loadingPanel)
         setToolbar(createToolbar())
-        openRowOnClick()
+        openRowOnDoubleClick()
         openSelectedRowOnEnter()
     }
 
@@ -77,14 +80,18 @@ class ReviewQueuePanel(
             .apply { targetComponent = this@ReviewQueuePanel }
             .component
 
-    private fun openRowOnClick() {
-        object : ClickListener() {
-            override fun onClick(event: MouseEvent, clickCount: Int): Boolean {
+    private fun openRowOnDoubleClick() {
+        object : DoubleClickListener() {
+            override fun onDoubleClick(event: MouseEvent): Boolean {
                 val row = rowAt(event.point) ?: return false
                 onOpen(row)
                 return true
             }
         }.installOn(list)
+    }
+
+    private fun JBList<ReviewRow>.fitRowsToVisibleWidth() {
+        fixedCellWidth = 1
     }
 
     private fun rowAt(point: Point): ReviewRow? {
