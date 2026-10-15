@@ -20,4 +20,12 @@ internal suspend fun fetchReviewRequestsFor(
     accounts: Collection<GithubAccount>,
     findToken: suspend (GithubAccount) -> String?,
     transportFor: (endpoint: URI, token: String) -> GitHubGraphQl = ::HttpGitHubGraphQl,
-): ReviewRequestsResult = TODO("Step 4b-iii")
+): ReviewRequestsResult {
+    val account = preferredAccount(accounts) ?: return ReviewRequestsResult.NotSignedIn
+    val token = findToken(account) ?: return ReviewRequestsResult.NotSignedIn
+    val transport = transportFor(URI(account.server.toGraphQLUrl()), token)
+    return GitHubReviewSource(transport).fetchReviewRequests()
+}
+
+private fun preferredAccount(accounts: Collection<GithubAccount>): GithubAccount? =
+    accounts.firstOrNull { it.server.isGithubDotCom } ?: accounts.firstOrNull()
