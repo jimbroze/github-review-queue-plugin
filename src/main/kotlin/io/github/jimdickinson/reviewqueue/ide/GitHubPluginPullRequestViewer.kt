@@ -15,10 +15,10 @@ import org.jetbrains.plugins.github.authentication.accounts.GHAccountManager
 import org.jetbrains.plugins.github.authentication.accounts.GithubAccount
 import org.jetbrains.plugins.github.pullrequest.ui.GHPRProjectViewModel
 import org.jetbrains.plugins.github.util.GHGitRepositoryMapping
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration
 
-object GitHubPluginPullRequestViewer : PullRequestViewer<Project> {
-    private val waitForGitHubPlugin = 3.seconds
+/** Waits at most [waitForGitHubPlugin] for each step of the GitHub plugin: finding remotes, then connecting. */
+class GitHubPluginPullRequestViewer(private val waitForGitHubPlugin: Duration) : PullRequestViewer<Project> {
 
     override suspend fun hasRepository(project: Project, repository: RepositoryName): Boolean =
         failingSafe("check ${project.name} for $repository") { mappingFor(project, repository) != null }
