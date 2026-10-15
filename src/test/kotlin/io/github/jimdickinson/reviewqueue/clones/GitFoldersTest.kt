@@ -2,6 +2,7 @@ package io.github.jimdickinson.reviewqueue.clones
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -78,5 +79,33 @@ class GitFoldersTest {
         )
 
         assertEquals(listOf("git@github.com:jimbroze/kbus.git"), GitFolders.remoteUrls(clone))
+    }
+
+    @Test
+    fun `a repository folder is its own enclosing repository`() {
+        val repository = temp.clone("home/kbus")
+
+        assertEquals(repository, GitFolders.enclosingRepository(repository, stopAt = temp.folder("home")))
+    }
+
+    @Test
+    fun `a folder inside a repository belongs to the nearest enclosing repository`() {
+        val monorepo = temp.clone("home/monorepo")
+        val app = temp.folder("home/monorepo/apps/web")
+
+        assertEquals(monorepo, GitFolders.enclosingRepository(app, stopAt = temp.folder("home")))
+    }
+
+    @Test
+    fun `the search for an enclosing repository stops below the stop folder`() {
+        val home = temp.clone("home")
+        val project = temp.folder("home/notes")
+
+        assertNull(GitFolders.enclosingRepository(project, stopAt = home))
+    }
+
+    @Test
+    fun `a folder outside any repository has no enclosing repository`() {
+        assertNull(GitFolders.enclosingRepository(temp.folder("home/notes"), stopAt = temp.folder("home")))
     }
 }
