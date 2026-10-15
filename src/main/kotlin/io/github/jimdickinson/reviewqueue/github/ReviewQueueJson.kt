@@ -4,7 +4,6 @@ import io.github.jimdickinson.reviewqueue.queue.PullRequestRef
 import io.github.jimdickinson.reviewqueue.queue.RepositoryName
 import io.github.jimdickinson.reviewqueue.timeline.Reviewer
 import io.github.jimdickinson.reviewqueue.timeline.TimelineEvent
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -24,17 +23,12 @@ internal data class SearchedPullRequest(
 
 private const val DRAFT_REVIEW_STATE = "PENDING"
 
-internal fun parseViewerLogin(json: String): String = data(json).obj("viewer").string("login")
+internal fun parseViewerLogin(data: JsonObject): String = data.obj("viewer").string("login")
 
-internal fun parseReviewQueue(json: String): ReviewQueueData {
-    val data = data(json)
-    return ReviewQueueData(
-        teamSlugs = viewerTeamSlugs(data.obj("viewer")),
-        pullRequests = data.obj("search").nodes().map(::searchedPullRequest),
-    )
-}
-
-private fun data(json: String): JsonObject = Json.parseToJsonElement(json).jsonObject.obj("data")
+internal fun parseReviewQueue(data: JsonObject): ReviewQueueData = ReviewQueueData(
+    teamSlugs = viewerTeamSlugs(data.obj("viewer")),
+    pullRequests = data.obj("search").nodes().map(::searchedPullRequest),
+)
 
 private fun viewerTeamSlugs(viewer: JsonObject): Set<String> =
     viewer.obj("organizations").nodes()
@@ -84,4 +78,5 @@ private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive
 
 private fun JsonObject.instant(key: String): Instant = Instant.parse(string(key))
 
-private fun JsonObject.nodes(): List<JsonObject> = getValue("nodes").jsonArray.map { it.jsonObject }
+// GitHub returns a null node for anything the viewer may not see, e.g. an organisation behind SAML sign-in.
+private fun JsonObject.nodes(): List<JsonObject> = getValue("nodes").jsonArray.filterIsInstance<JsonObject>()

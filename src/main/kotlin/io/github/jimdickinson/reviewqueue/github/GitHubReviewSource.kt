@@ -10,20 +10,15 @@ import io.github.jimdickinson.reviewqueue.timeline.pendingReviewFor
 class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
 
     /** Returns every open pull request, across all repositories, awaiting the signed-in user's review. */
-    suspend fun fetchReviewRequests(): ReviewRequestsResult = try {
-        val login = parseViewerLogin(graphQl.query(VIEWER_QUERY, emptyMap()).json())
-        val reviewQueue = parseReviewQueue(
-            graphQl.query(REVIEW_QUEUE_QUERY, mapOf("login" to login, "searchQuery" to SEARCH_QUERY)).json(),
-        )
+    suspend fun fetchReviewRequests(): ReviewRequestsResult {
+        val login = graphQl.query(VIEWER_QUERY, emptyMap())
+            .answer(::parseViewerLogin)
+            .valueOr { return it }
+        val reviewQueue = graphQl.query(REVIEW_QUEUE_QUERY, mapOf("login" to login, "searchQuery" to SEARCH_QUERY))
+            .answer(::parseReviewQueue)
+            .valueOr { return it }
         val viewer = Viewer(login, reviewQueue.teamSlugs)
-        ReviewRequestsResult.Success(reviewQueue.pullRequests.map { reviewRequest(it, viewer) })
-    } catch (unexpectedResponse: Exception) {
-        TODO("Step 4b: report GraphQL errors and unexpected responses as failures")
-    }
-
-    private fun GraphQlResponse.json(): String = when (this) {
-        is GraphQlResponse.Body -> json
-        else -> TODO("Step 4b: report transport failures")
+        return ReviewRequestsResult.Success(reviewQueue.pullRequests.map { reviewRequest(it, viewer) })
     }
 
     private fun reviewRequest(pullRequest: SearchedPullRequest, viewer: Viewer): ReviewRequest {
