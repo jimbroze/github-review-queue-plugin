@@ -17,6 +17,11 @@
                     icon="AllIcons.Vcs.Vendors.Github"
                     factoryClass="io.github.jimdickinson.reviewqueue.ReviewQueueToolWindowFactory"/>
         <notificationGroup id="Review Queue" displayType="BALLOON"/>
+        <applicationConfigurable parentId="tools"
+                                 id="io.github.jimdickinson.reviewqueue.settings"
+                                 instance="io.github.jimdickinson.reviewqueue.settings.ReviewQueueConfigurable"
+                                 bundle="messages.ReviewQueueBundle"
+                                 key="settings.displayName"/>
     </extensions>
 
 </idea-plugin>

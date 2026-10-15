@@ -27,5 +27,8 @@ internal suspend fun fetchReviewRequestsFor(
     return GitHubReviewSource(transport).fetchReviewRequests()
 }
 
+/** The GitHub account signed in to the IDE that the review queue uses, or null when there is none. */
+fun preferredIdeAccount(): GithubAccount? = preferredAccount(service<GHAccountManager>().accountsState.value)
+
 private fun preferredAccount(accounts: Collection<GithubAccount>): GithubAccount? =
     accounts.firstOrNull { it.server.isGithubDotCom } ?: accounts.firstOrNull()
