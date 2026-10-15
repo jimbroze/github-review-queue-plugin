@@ -16,7 +16,15 @@ class LocalCloneFinderTest {
     private val kbusRemote = "origin" to "git@github.com:jimbroze/kbus.git"
 
     private fun clonesOf(recentProjects: List<Path> = emptyList(), codeFolders: List<Path> = emptyList()) =
-        LocalCloneFinder({ recentProjects }, { codeFolders }).clonesOf(kbus)
+        LocalCloneFinder({ recentProjects }, { codeFolders }, stopSearchingUpAt = temp.root.toPath()).clonesOf(kbus)
+
+    @Test
+    fun `a recent project inside a clone finds the enclosing clone`() {
+        val monorepo = temp.clone("monorepo", kbusRemote)
+        val app = temp.folder("monorepo/apps/web")
+
+        assertEquals(listOf(monorepo), clonesOf(recentProjects = listOf(app)))
+    }
 
     @Test
     fun `a recent project that is a clone of the repository is found`() {
