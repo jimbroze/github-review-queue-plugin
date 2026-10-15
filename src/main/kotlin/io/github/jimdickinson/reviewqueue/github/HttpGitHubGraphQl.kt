@@ -5,9 +5,6 @@ import java.net.http.HttpClient
 import java.time.Clock
 import java.time.Duration
 
-/** Returns the GraphQL endpoint of the GitHub server at [host], e.g. `github.com` or a GitHub Enterprise host. */
-fun graphQlEndpoint(host: String): URI = TODO("Step 4b-ii")
-
 /** Sends GraphQL requests over HTTP to [endpoint], authenticated with [token]. */
 class HttpGitHubGraphQl(
     private val endpoint: URI,

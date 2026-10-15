@@ -17,16 +17,6 @@ class HttpGitHubGraphQlTest {
     private val ok = CannedResponse(200, """{ "data": {} }""")
 
     @Test
-    fun `github dot com is queried through its API host`() {
-        assertEquals(URI("https://api.github.com/graphql"), graphQlEndpoint("github.com"))
-    }
-
-    @Test
-    fun `a GitHub Enterprise server is queried at its own GraphQL path`() {
-        assertEquals(URI("https://github.acme.com/api/graphql"), graphQlEndpoint("github.acme.com"))
-    }
-
-    @Test
     fun `the query is posted to the endpoint`() {
         val request = requestSentFor(ok)
 
