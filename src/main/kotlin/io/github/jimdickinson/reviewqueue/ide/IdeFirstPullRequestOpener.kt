@@ -17,8 +17,9 @@ class IdeFirstPullRequestOpener<P>(
 ) {
     suspend fun open(pullRequest: PullRequestRef, url: String) {
         val project = preferredProjectWith(pullRequest.repository)
-        if (project == null || !showIn(project, pullRequest)) {
-            browser.open(pullRequest, url)
+        when {
+            project == null -> openOutsideOpenProjects(pullRequest, url)
+            !showIn(project, pullRequest) -> browser.open(pullRequest, url)
         }
     }
 

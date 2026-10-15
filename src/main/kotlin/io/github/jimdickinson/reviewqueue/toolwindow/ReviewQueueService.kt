@@ -25,7 +25,7 @@ class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
         viewer = GitHubPluginPullRequestViewer,
         bringToFront = { ApplicationManager.getApplication().invokeLater { ProjectUtil.focusProjectWindow(it, true) } },
         browser = BrowserPullRequestOpener,
-        openOutsideOpenProjects = { _, _ -> TODO() },
+        openOutsideOpenProjects = BrowserPullRequestOpener::open,
     )
 
     private val viewModel = ReviewQueueViewModel(

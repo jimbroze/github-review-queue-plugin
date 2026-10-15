@@ -45,6 +45,44 @@ class OutsideOpenProjectsOpener<P>(
     private val reportFailure: (OpenFailure) -> Unit,
 ) {
     suspend fun open(pullRequest: PullRequestRef, url: String) {
-        TODO()
+        when (val choice = dialogs.pick(choicesFor(pullRequest.repository))) {
+            is OpenChoice.OpenClone -> openAndShow(choice.folder, pullRequest, url)
+            is OpenChoice.Clone -> cloneAndShow(choice, pullRequest, url)
+            OpenChoice.OpenInBrowser -> browser.open(pullRequest, url)
+            null -> Unit
+        }
+    }
+
+    private suspend fun choicesFor(repository: RepositoryName): List<OpenChoice> =
+        findClones(repository).map(OpenChoice::OpenClone) +
+            OpenChoice.Clone(repository, suggestedCloneParentFolder()) +
+            OpenChoice.OpenInBrowser
+
+    private suspend fun cloneAndShow(choice: OpenChoice.Clone, pullRequest: PullRequestRef, url: String) {
+        val parentFolder = dialogs.pickCloneParentFolder(choice.parentFolder) ?: return
+        val target = freeFolderFor(choice.repository, parentFolder)
+        if (folders.clone(choice.repository, target)) {
+            openAndShow(target, pullRequest, url)
+        } else {
+            fallBackToBrowser(OpenFailure.CouldNotClone(choice.repository), pullRequest, url)
+        }
+    }
+
+    private fun freeFolderFor(repository: RepositoryName, parentFolder: Path): Path =
+        generateSequence(1) { it + 1 }
+            .map { attempt -> parentFolder.resolve(if (attempt == 1) repository.name else "${repository.name}-$attempt") }
+            .first { !folders.exists(it) }
+
+    private suspend fun openAndShow(folder: Path, pullRequest: PullRequestRef, url: String) {
+        val project = folders.open(folder)
+        when {
+            project == null -> fallBackToBrowser(OpenFailure.CouldNotOpenFolder(folder), pullRequest, url)
+            !showWhenReady(project, pullRequest) -> fallBackToBrowser(OpenFailure.CouldNotShow(pullRequest), pullRequest, url)
+        }
+    }
+
+    private fun fallBackToBrowser(failure: OpenFailure, pullRequest: PullRequestRef, url: String) {
+        reportFailure(failure)
+        browser.open(pullRequest, url)
     }
 }
