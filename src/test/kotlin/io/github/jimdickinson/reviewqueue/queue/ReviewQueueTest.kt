@@ -33,7 +33,7 @@ class ReviewQueueTest {
     }
 
     @Test
-    fun `requests to you come before requests to your teams`() {
+    fun `requests to you come before requests to your teams asked at the same time`() {
         val toTeam = request(number = 1, reviewer = aTeam)
         val toYou = request(number = 2, reviewer = RequestedReviewer.You)
 
@@ -41,11 +41,11 @@ class ReviewQueueTest {
     }
 
     @Test
-    fun `a newer request to you comes before an older request to your team`() {
-        val olderToTeam = request(number = 1, reviewer = aTeam, requestedAt = earlier)
-        val newerToYou = request(number = 2, reviewer = RequestedReviewer.You, requestedAt = later)
+    fun `an older request to your team comes before a newer request to you`() {
+        val newerToYou = request(number = 1, reviewer = RequestedReviewer.You, requestedAt = later)
+        val olderToTeam = request(number = 2, reviewer = aTeam, requestedAt = earlier)
 
-        assertOrder(listOf(olderToTeam, newerToYou), expected = listOf(newerToYou, olderToTeam))
+        assertOrder(listOf(newerToYou, olderToTeam), expected = listOf(olderToTeam, newerToYou))
     }
 
     @Test
@@ -67,7 +67,7 @@ class ReviewQueueTest {
     }
 
     @Test
-    fun `a mixed queue is ordered by re-review, then who was asked, then waiting time`() {
+    fun `a mixed queue is ordered by re-review, then waiting time, then who was asked`() {
         val firstTimeToTeamOldest = request(number = 1, isReReview = false, reviewer = aTeam, requestedAt = earliest)
         val firstTimeToYouNewer = request(number = 2, isReReview = false, reviewer = RequestedReviewer.You, requestedAt = later)
         val firstTimeToYouOlder = request(number = 3, isReReview = false, reviewer = RequestedReviewer.You, requestedAt = earlier)
@@ -85,12 +85,12 @@ class ReviewQueueTest {
                 reReviewToYouOlder,
             ),
             expected = listOf(
+                reReviewToTeamOldest,
                 reReviewToYouOlder,
                 reReviewToYouNewer,
-                reReviewToTeamOldest,
+                firstTimeToTeamOldest,
                 firstTimeToYouOlder,
                 firstTimeToYouNewer,
-                firstTimeToTeamOldest,
             ),
         )
     }
