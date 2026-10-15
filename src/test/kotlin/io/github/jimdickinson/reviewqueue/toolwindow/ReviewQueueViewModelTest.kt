@@ -12,12 +12,15 @@ import io.github.jimdickinson.reviewqueue.toolwindow.ReviewQueueState.NothingWai
 import io.github.jimdickinson.reviewqueue.toolwindow.ReviewQueueState.RateLimited
 import io.github.jimdickinson.reviewqueue.toolwindow.ReviewQueueState.Showing
 import io.github.jimdickinson.reviewqueue.toolwindow.ReviewQueueState.SignInExpired
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
@@ -40,20 +43,32 @@ class ReviewQueueViewModelTest {
     }
 
     @Test
-    fun `the queue is loading while the requests are being fetched`() = runBlocking {
-        val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(emptyList()))
+    fun `the first load shows loading`() = runBlocking {
+        val stillFetching = CompletableDeferred<ReviewRequestsResult>()
+        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock)
+
+        assertEquals(Loading, stateWhileFetching(viewModel, stillFetching))
+    }
+
+    @Test
+    fun `refreshing keeps the current rows visible while it fetches`() = runBlocking {
+        val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
         val responses = ArrayDeque(listOf(loaded, stillFetching))
         val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock)
         viewModel.refresh()
 
-        val secondRefresh = launch { viewModel.refresh() }
-        yield()
-        val stateWhileFetching = viewModel.state.value
-        stillFetching.complete(ReviewRequestsResult.Success(emptyList()))
-        secondRefresh.join()
+        val state = stateWhileFetching(viewModel, stillFetching) as Showing
 
-        assertEquals(Loading, stateWhileFetching)
+        assertEquals(listOf(1L), state.rows.map { it.pullRequest.number })
+        assertTrue(state.isRefreshing)
+    }
+
+    @Test
+    fun `a loaded list is not marked as refreshing`() {
+        val state = stateAfterRefresh(ReviewRequestsResult.Success(listOf(request()))) as Showing
+
+        assertFalse(state.isRefreshing)
     }
 
     @Test
@@ -183,6 +198,34 @@ class ReviewQueueViewModelTest {
         viewModel.refresh()
 
         assertTrue(viewModel.state.value is Showing)
+    }
+
+    @Test
+    fun `a fetch that throws unexpectedly shows that the queue could not load`() = runBlocking {
+        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock)
+        viewModel.refresh()
+
+        assertEquals(CouldNotLoad("connection reset"), viewModel.state.value)
+    }
+
+    @Test
+    fun `a cancelled fetch is not shown as a failure`() {
+        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock)
+
+        assertThrows(CancellationException::class.java) { runBlocking { viewModel.refresh() } }
+        assertFalse(viewModel.state.value is CouldNotLoad)
+    }
+
+    private suspend fun stateWhileFetching(
+        viewModel: ReviewQueueViewModel,
+        pendingResponse: CompletableDeferred<ReviewRequestsResult>,
+    ): ReviewQueueState = coroutineScope {
+        val refresh = launch { viewModel.refresh() }
+        yield()
+        val state = viewModel.state.value
+        pendingResponse.complete(ReviewRequestsResult.Success(emptyList()))
+        refresh.join()
+        state
     }
 
     private fun viewModelReturning(vararg results: ReviewRequestsResult): ReviewQueueViewModel {

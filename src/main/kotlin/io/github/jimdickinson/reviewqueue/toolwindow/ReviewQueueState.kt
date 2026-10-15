@@ -4,7 +4,7 @@ import io.github.jimdickinson.reviewqueue.queue.PullRequestRef
 
 sealed interface ReviewQueueState {
     data object Loading : ReviewQueueState
-    data class Showing(val rows: List<ReviewRow>) : ReviewQueueState
+    data class Showing(val rows: List<ReviewRow>, val isRefreshing: Boolean) : ReviewQueueState
     data object NothingWaiting : ReviewQueueState
     data object NeedsSignIn : ReviewQueueState
     data object SignInExpired : ReviewQueueState
