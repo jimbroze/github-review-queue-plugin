@@ -5,6 +5,7 @@ import io.github.jimdickinson.reviewqueue.queue.RepositoryName
 import io.github.jimdickinson.reviewqueue.toolwindow.PullRequestOpener
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class IdeFirstPullRequestOpenerTest {
@@ -18,6 +19,7 @@ class IdeFirstPullRequestOpenerTest {
     private val another = FakeProject("another")
 
     private val viewer = FakeViewer()
+    private val projectsWithoutGitRemotes = mutableSetOf<FakeProject>()
     private val windowsBroughtToFront = mutableListOf<FakeProject>()
     private val urlsOpenedInBrowser = mutableListOf<String>()
 
@@ -100,10 +102,32 @@ class IdeFirstPullRequestOpenerTest {
         assertEquals(listOf(url), urlsOpenedInBrowser)
     }
 
+    @Test
+    fun `a project without git remotes is never asked whether it has the repository`() {
+        projectsWithoutGitRemotes += other
+        viewer.hasRepositoryIn(another)
+
+        open(openProjects = listOf(current, other, another))
+
+        assertFalse(other in viewer.askedForRepository)
+        assertEquals(listOf(another to pullRequest), viewer.shown)
+    }
+
+    @Test
+    fun `a pull request opens in the browser when no open project has git remotes`() {
+        projectsWithoutGitRemotes += listOf(current, other)
+
+        open(openProjects = listOf(current, other))
+
+        assertEquals(emptyList<FakeProject>(), viewer.askedForRepository)
+        assertEquals(listOf(url), urlsOpenedInBrowser)
+    }
+
     private fun open(openProjects: List<FakeProject>) = runBlocking {
         IdeFirstPullRequestOpener(
             currentProject = current,
             openProjects = { openProjects },
+            hasGitRemotes = { it !in projectsWithoutGitRemotes },
             viewer = viewer,
             bringToFront = { windowsBroughtToFront += it },
             browser = PullRequestOpener { _, openedUrl -> urlsOpenedInBrowser += openedUrl },
@@ -116,6 +140,7 @@ class IdeFirstPullRequestOpenerTest {
         private val projectsWithRepository = mutableSetOf<FakeProject>()
         private val projectsThatCannotShow = mutableSetOf<FakeProject>()
         val shown = mutableListOf<Pair<FakeProject, PullRequestRef>>()
+        val askedForRepository = mutableListOf<FakeProject>()
 
         fun hasRepositoryIn(vararg projects: FakeProject) {
             projectsWithRepository += projects
@@ -125,8 +150,10 @@ class IdeFirstPullRequestOpenerTest {
             projectsThatCannotShow += project
         }
 
-        override suspend fun hasRepository(project: FakeProject, repository: RepositoryName): Boolean =
-            project in projectsWithRepository
+        override suspend fun hasRepository(project: FakeProject, repository: RepositoryName): Boolean {
+            askedForRepository += project
+            return project in projectsWithRepository
+        }
 
         override suspend fun show(project: FakeProject, pullRequest: PullRequestRef): Boolean {
             if (project in projectsThatCannotShow) return false

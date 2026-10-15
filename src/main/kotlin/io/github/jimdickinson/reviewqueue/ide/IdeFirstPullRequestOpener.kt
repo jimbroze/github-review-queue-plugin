@@ -9,6 +9,7 @@ import kotlinx.coroutines.coroutineScope
 class IdeFirstPullRequestOpener<P>(
     private val currentProject: P,
     private val openProjects: () -> List<P>,
+    private val hasGitRemotes: (P) -> Boolean,
     private val viewer: PullRequestViewer<P>,
     private val bringToFront: (P) -> Unit,
     private val browser: PullRequestOpener,
