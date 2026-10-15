@@ -22,7 +22,7 @@ class GitHubReviewSourceTest {
 
         runBlocking { GitHubReviewSource(graphQl).fetchReviewRequests() }
 
-        assertTrue(graphQl.receivedVariables.any { "is:pr is:open archived:false review-requested:@me" in it.values })
+        assertTrue(graphQl.receivedVariables.any { "is:pr is:open archived:false review-requested:@me -assignee:@me" in it.values })
     }
 
     @Test
@@ -43,7 +43,7 @@ class GitHubReviewSourceTest {
     fun `a pull request requesting your review directly is listed with its details`() {
         val result = fetch(
             pullRequest(
-                owner = "acme", repository = "rocket", number = 42, title = "Add thrusters",
+                owner = "acme", repository = "rocket", number = 42, title = "Add thrusters", author = "alice",
                 timeline = listOf(reviewRequested("2026-01-02T10:00:00Z", user(you))),
             ),
         )
@@ -51,10 +51,12 @@ class GitHubReviewSourceTest {
         val expected = ReviewRequest(
             pullRequest = PullRequestRef(RepositoryName("acme", "rocket"), 42),
             title = "Add thrusters",
+            authorLogin = "alice",
             url = "https://github.com/acme/rocket/pull/42",
             requestedAt = Instant.parse("2026-01-02T10:00:00Z"),
             requestedReviewer = RequestedReviewer.You,
             isReReview = false,
+            isDraft = false,
         )
         assertEquals(ReviewRequestsResult.Success(listOf(expected)), result)
     }
@@ -174,6 +176,44 @@ class GitHubReviewSourceTest {
         assertEquals(RequestedReviewer.You, request.requestedReviewer)
         assertEquals(Instant.parse("2026-01-01T09:00:00Z"), request.requestedAt)
         assertEquals(false, request.isReReview)
+    }
+
+    @Test
+    fun `pull requests assigned to you are left out of the search`() {
+        val graphQl = fakeGitHub()
+
+        runBlocking { GitHubReviewSource(graphQl).fetchReviewRequests() }
+
+        val searchTerms = graphQl.receivedVariables.flatMap { it.values }.filterIsInstance<String>().flatMap { it.split(" ") }
+        assertTrue("-assignee:@me" in searchTerms)
+    }
+
+    @Test
+    fun `a draft pull request is marked as a draft`() {
+        val request = fetchSingle(pullRequest(isDraft = true, timeline = listOf(requestedFromYou())))
+
+        assertEquals(true, request.isDraft)
+    }
+
+    @Test
+    fun `a pull request ready for review is not a draft`() {
+        val request = fetchSingle(pullRequest(isDraft = false, timeline = listOf(requestedFromYou())))
+
+        assertEquals(false, request.isDraft)
+    }
+
+    @Test
+    fun `a pull request is listed with its author's login`() {
+        val request = fetchSingle(pullRequest(author = "alice", timeline = listOf(requestedFromYou())))
+
+        assertEquals("alice", request.authorLogin)
+    }
+
+    @Test
+    fun `a pull request whose author's account was deleted is listed as by ghost`() {
+        val request = fetchSingle(pullRequest(author = null, timeline = listOf(requestedFromYou())))
+
+        assertEquals("ghost", request.authorLogin)
     }
 
     private fun requestedFromYou() = reviewRequested("2026-01-02T10:00:00Z", user(you))

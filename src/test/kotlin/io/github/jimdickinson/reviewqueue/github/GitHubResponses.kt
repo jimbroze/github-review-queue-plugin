@@ -46,18 +46,24 @@ fun pullRequest(
     repository: String = "rocket",
     number: Long = 42,
     title: String = "Add thrusters",
+    author: String? = "hubot",
+    isDraft: Boolean = false,
     createdAt: String = "2026-01-01T09:00:00Z",
     timeline: List<String>,
 ) = """
     {
       "number": $number,
       "title": "$title",
+      "author": ${authorJson(author)},
+      "isDraft": $isDraft,
       "url": "https://github.com/$owner/$repository/pull/$number",
       "createdAt": "$createdAt",
       "repository": { "name": "$repository", "owner": { "login": "$owner" } },
       "timelineItems": { "nodes": [${timeline.joinToString()}] }
     }
 """
+
+private fun authorJson(login: String?) = if (login == null) "null" else """{ "login": "$login" }"""
 
 fun reviewRequested(at: String, reviewer: String) =
     """{ "__typename": "ReviewRequestedEvent", "createdAt": "$at", "requestedReviewer": $reviewer }"""

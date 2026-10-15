@@ -18,9 +18,11 @@ val ReviewQueueState.isFetching: Boolean
 data class ReviewRow(
     val pullRequestLabel: String,
     val title: String,
+    val authorLogin: String,
     val waitingFor: String,
     val requestedFrom: String,
     val isReReview: Boolean,
+    val isDraft: Boolean,
     val pullRequest: PullRequestRef,
     val url: String,
 )

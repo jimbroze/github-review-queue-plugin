@@ -26,10 +26,12 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
         return ReviewRequest(
             pullRequest = pullRequest.ref,
             title = pullRequest.title,
+            authorLogin = "",
             url = pullRequest.url,
             requestedAt = pending.requestedAt,
             requestedReviewer = pending.requestedReviewer,
             isReReview = pending.isReReview,
+            isDraft = false,
         )
     }
 

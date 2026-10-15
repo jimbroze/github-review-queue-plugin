@@ -95,18 +95,50 @@ class ReviewQueueTest {
         )
     }
 
+    @Test
+    fun `pull requests ready for review come before drafts`() {
+        val draft = request(number = 1, isDraft = true)
+        val ready = request(number = 2, isDraft = false)
+
+        assertOrder(listOf(draft, ready), expected = listOf(ready, draft))
+    }
+
+    @Test
+    fun `a draft re-review waiting longest still comes after a newer first-time request ready for review`() {
+        val draftReReviewOldest = request(number = 1, isDraft = true, isReReview = true, requestedAt = earliest)
+        val readyFirstTimeNewer = request(number = 2, isDraft = false, isReReview = false, requestedAt = later)
+
+        assertOrder(listOf(draftReReviewOldest, readyFirstTimeNewer), expected = listOf(readyFirstTimeNewer, draftReReviewOldest))
+    }
+
+    @Test
+    fun `drafts are ordered among themselves by re-review, then waiting time, then who was asked`() {
+        val toTeamOldest = request(number = 1, isDraft = true, reviewer = aTeam, requestedAt = earliest)
+        val toYouNewer = request(number = 2, isDraft = true, reviewer = RequestedReviewer.You, requestedAt = later)
+        val toYouSameTimeAsTeam = request(number = 3, isDraft = true, reviewer = RequestedReviewer.You, requestedAt = earliest)
+        val reReviewNewest = request(number = 4, isDraft = true, isReReview = true, requestedAt = later)
+
+        assertOrder(
+            listOf(toTeamOldest, toYouNewer, toYouSameTimeAsTeam, reReviewNewest),
+            expected = listOf(reReviewNewest, toYouSameTimeAsTeam, toTeamOldest, toYouNewer),
+        )
+    }
+
     private fun request(
         number: Long,
         isReReview: Boolean = false,
         reviewer: RequestedReviewer = RequestedReviewer.You,
         requestedAt: Instant = earlier,
+        isDraft: Boolean = false,
     ) = ReviewRequest(
         pullRequest = PullRequestRef(RepositoryName("acme", "widgets"), number),
         title = "PR #$number",
+        authorLogin = "alice",
         url = "https://github.com/acme/widgets/pull/$number",
         requestedAt = requestedAt,
         requestedReviewer = reviewer,
         isReReview = isReReview,
+        isDraft = isDraft,
     )
 
     private fun assertOrder(input: List<ReviewRequest>, expected: List<ReviewRequest>) {

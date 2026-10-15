@@ -14,8 +14,10 @@ sealed interface RequestedReviewer {
 data class ReviewRequest(
     val pullRequest: PullRequestRef,
     val title: String,
+    val authorLogin: String,
     val url: String,
     val requestedAt: Instant,
     val requestedReviewer: RequestedReviewer,
     val isReReview: Boolean,
+    val isDraft: Boolean,
 )

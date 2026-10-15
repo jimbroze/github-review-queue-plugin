@@ -104,6 +104,27 @@ class ReviewQueueViewModelTest {
     }
 
     @Test
+    fun `a row shows who opened the pull request`() {
+        val row = refreshedRows(request(authorLogin = "alice")).single()
+
+        assertEquals("alice", row.authorLogin)
+    }
+
+    @Test
+    fun `a draft row is marked as a draft`() {
+        val row = refreshedRows(request(isDraft = true)).single()
+
+        assertTrue(row.isDraft)
+    }
+
+    @Test
+    fun `a row ready for review is not marked as a draft`() {
+        val row = refreshedRows(request(isDraft = false)).single()
+
+        assertFalse(row.isDraft)
+    }
+
+    @Test
     fun `a row requested from you says it was requested from you`() {
         val row = refreshedRows(request(reviewer = RequestedReviewer.You)).single()
 
@@ -250,12 +271,16 @@ class ReviewQueueViewModelTest {
         requestedAt: Instant = now.minus(Duration.ofHours(1)),
         reviewer: RequestedReviewer = RequestedReviewer.You,
         isReReview: Boolean = false,
+        authorLogin: String = "alice",
+        isDraft: Boolean = false,
     ) = ReviewRequest(
         pullRequest = PullRequestRef(RepositoryName(owner, repository), number),
         title = title,
+        authorLogin = authorLogin,
         url = "https://github.com/$owner/$repository/pull/$number",
         requestedAt = requestedAt,
         requestedReviewer = reviewer,
         isReReview = isReReview,
+        isDraft = isDraft,
     )
 }
