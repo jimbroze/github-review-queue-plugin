@@ -1,0 +1,22 @@
+<idea-plugin>
+    <id>io.github.jimdickinson.reviewqueue</id>
+    <name>Review Queue</name>
+    <vendor>jimbroze</vendor>
+    <description><![CDATA[
+        <p>Lists the GitHub pull requests waiting on your review across all repositories,
+        oldest request first, with re-review requests at the top.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+    <depends>org.jetbrains.plugins.github</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Review Queue"
+                    anchor="right"
+                    icon="AllIcons.Vcs.Vendors.Github"
+                    factoryClass="io.github.jimdickinson.reviewqueue.ReviewQueueToolWindowFactory"/>
+        <notificationGroup id="Review Queue" displayType="BALLOON"/>
+    </extensions>
+
+</idea-plugin>
