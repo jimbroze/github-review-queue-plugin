@@ -13,6 +13,7 @@ class IdeFirstPullRequestOpener<P>(
     private val viewer: PullRequestViewer<P>,
     private val bringToFront: (P) -> Unit,
     private val browser: PullRequestOpener,
+    private val openOutsideOpenProjects: suspend (PullRequestRef, String) -> Unit,
 ) {
     suspend fun open(pullRequest: PullRequestRef, url: String) {
         val project = preferredProjectWith(pullRequest.repository)

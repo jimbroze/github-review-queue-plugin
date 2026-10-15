@@ -22,6 +22,7 @@ class IdeFirstPullRequestOpenerTest {
     private val projectsWithoutGitRemotes = mutableSetOf<FakeProject>()
     private val windowsBroughtToFront = mutableListOf<FakeProject>()
     private val urlsOpenedInBrowser = mutableListOf<String>()
+    private val pullRequestsNotInOpenProjects = mutableListOf<PullRequestRef>()
 
     @Test
     fun `a pull request from the current project's repository opens in its pull request view`() {
@@ -74,10 +75,11 @@ class IdeFirstPullRequestOpenerTest {
     }
 
     @Test
-    fun `a pull request from a repository no open project has opens in the browser`() {
+    fun `a pull request from a repository no open project has is opened outside the open projects`() {
         open(openProjects = listOf(current, other))
 
-        assertEquals(listOf(url), urlsOpenedInBrowser)
+        assertEquals(listOf(pullRequest), pullRequestsNotInOpenProjects)
+        assertEquals(emptyList<String>(), urlsOpenedInBrowser)
         assertEquals(emptyList<Pair<FakeProject, PullRequestRef>>(), viewer.shown)
         assertEquals(emptyList<FakeProject>(), windowsBroughtToFront)
     }
@@ -114,13 +116,23 @@ class IdeFirstPullRequestOpenerTest {
     }
 
     @Test
-    fun `a pull request opens in the browser when no open project has git remotes`() {
+    fun `a pull request is opened outside the open projects when none has git remotes`() {
         projectsWithoutGitRemotes += listOf(current, other)
 
         open(openProjects = listOf(current, other))
 
         assertEquals(emptyList<FakeProject>(), viewer.askedForRepository)
-        assertEquals(listOf(url), urlsOpenedInBrowser)
+        assertEquals(listOf(pullRequest), pullRequestsNotInOpenProjects)
+    }
+
+    @Test
+    fun `when an open project cannot show the pull request it is not opened outside the open projects`() {
+        viewer.hasRepositoryIn(current)
+        viewer.cannotShowIn(current)
+
+        open(openProjects = listOf(current))
+
+        assertEquals(emptyList<PullRequestRef>(), pullRequestsNotInOpenProjects)
     }
 
     private fun open(openProjects: List<FakeProject>) = runBlocking {
@@ -131,6 +143,7 @@ class IdeFirstPullRequestOpenerTest {
             viewer = viewer,
             bringToFront = { windowsBroughtToFront += it },
             browser = PullRequestOpener { _, openedUrl -> urlsOpenedInBrowser += openedUrl },
+            openOutsideOpenProjects = { notOpen, _ -> pullRequestsNotInOpenProjects += notOpen },
         ).open(pullRequest, url)
     }
 
