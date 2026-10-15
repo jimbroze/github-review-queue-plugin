@@ -52,7 +52,7 @@ class ReviewQueuePanel(
         val status = list.emptyText.clear()
         when (state) {
             ReviewQueueState.Loading, is ReviewQueueState.Showing -> Unit
-            ReviewQueueState.NothingWaiting -> status.appendLine(ReviewQueueBundle.message("status.nothingWaiting"))
+            is ReviewQueueState.NothingWaiting -> status.appendLine(ReviewQueueBundle.message("status.nothingWaiting"))
             ReviewQueueState.NeedsSignIn -> askToSignIn(ReviewQueueBundle.message("status.needsSignIn"))
             ReviewQueueState.SignInExpired -> askToSignIn(ReviewQueueBundle.message("status.signInExpired"))
             is ReviewQueueState.RateLimited -> status.appendLine(rateLimitMessage(state.resetsIn))

@@ -154,7 +154,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `no requests shows that nothing is waiting on your review`() {
-        assertEquals(NothingWaiting, stateAfterRefresh(ReviewRequestsResult.Success(emptyList())))
+        assertEquals(NothingWaiting(), stateAfterRefresh(ReviewRequestsResult.Success(emptyList())))
     }
 
     @Test
@@ -247,6 +247,27 @@ class ReviewQueueViewModelTest {
         pendingResponse.complete(ReviewRequestsResult.Success(emptyList()))
         refresh.join()
         state
+    }
+
+    @Test
+    fun `a warning that came with the list is shown with the rows`() {
+        val state = stateAfterRefresh(ReviewRequestsResult.Success(listOf(request()), warnings = listOf("Some teams are hidden")))
+
+        assertEquals(listOf("Some teams are hidden"), (state as Showing).warnings)
+    }
+
+    @Test
+    fun `a warning that came with an empty list is shown with the nothing-waiting message`() {
+        val state = stateAfterRefresh(ReviewRequestsResult.Success(emptyList(), warnings = listOf("Some teams are hidden")))
+
+        assertEquals(NothingWaiting(warnings = listOf("Some teams are hidden")), state)
+    }
+
+    @Test
+    fun `a list without warnings shows none`() {
+        val state = stateAfterRefresh(ReviewRequestsResult.Success(listOf(request())))
+
+        assertEquals(emptyList<String>(), state.warnings)
     }
 
     private fun viewModelReturning(vararg results: ReviewRequestsResult): ReviewQueueViewModel {

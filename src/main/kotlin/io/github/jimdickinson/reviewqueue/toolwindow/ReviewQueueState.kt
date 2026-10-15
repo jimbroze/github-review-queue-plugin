@@ -3,9 +3,15 @@ package io.github.jimdickinson.reviewqueue.toolwindow
 import io.github.jimdickinson.reviewqueue.queue.PullRequestRef
 
 sealed interface ReviewQueueState {
+    val warnings: List<String> get() = emptyList()
+
     data object Loading : ReviewQueueState
-    data class Showing(val rows: List<ReviewRow>, val isRefreshing: Boolean) : ReviewQueueState
-    data object NothingWaiting : ReviewQueueState
+    data class Showing(
+        val rows: List<ReviewRow>,
+        val isRefreshing: Boolean,
+        override val warnings: List<String> = emptyList(),
+    ) : ReviewQueueState
+    data class NothingWaiting(override val warnings: List<String> = emptyList()) : ReviewQueueState
     data object NeedsSignIn : ReviewQueueState
     data object SignInExpired : ReviewQueueState
     data class RateLimited(val resetsIn: String?) : ReviewQueueState

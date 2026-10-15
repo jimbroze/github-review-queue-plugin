@@ -58,7 +58,7 @@ class ReviewQueueViewModel(
 
     private fun stateFor(requests: List<ReviewRequest>): ReviewQueueState =
         if (requests.isEmpty()) {
-            ReviewQueueState.NothingWaiting
+            ReviewQueueState.NothingWaiting()
         } else {
             ReviewQueueState.Showing(ReviewQueue.order(requests).map(::rowFor), isRefreshing = false)
         }

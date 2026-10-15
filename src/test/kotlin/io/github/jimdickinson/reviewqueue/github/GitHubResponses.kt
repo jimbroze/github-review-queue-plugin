@@ -21,9 +21,13 @@ fun viewerResponse(login: String) = """{ "data": { "viewer": { "login": "$login"
 fun errorResponse(type: String, message: String) =
     """{ "data": null, "errors": [{ "type": "$type", "message": "$message" }] }"""
 
-fun withError(response: String, type: String, message: String): String {
-    val error = Json.parseToJsonElement("""[{ "type": "$type", "message": "$message" }]""")
-    return JsonObject(Json.parseToJsonElement(response).jsonObject + ("errors" to error)).toString()
+fun withError(response: String, type: String, message: String): String = withErrors(response, type to message)
+
+fun withErrors(response: String, vararg typesAndMessages: Pair<String, String>): String {
+    val errors = typesAndMessages.joinToString(prefix = "[", postfix = "]") { (type, message) ->
+        """{ "type": "$type", "message": "$message" }"""
+    }
+    return JsonObject(Json.parseToJsonElement(response).jsonObject + ("errors" to Json.parseToJsonElement(errors))).toString()
 }
 
 fun reviewQueueResponse(viewerTeams: List<String>, vararg pullRequests: String, hiddenOrganisations: Int = 0) = """

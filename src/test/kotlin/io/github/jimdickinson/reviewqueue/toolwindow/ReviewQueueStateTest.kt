@@ -27,7 +27,7 @@ class ReviewQueueStateTest {
 
     @Test
     fun `a settled state without rows is not fetching`() {
-        assertFalse(NothingWaiting.isFetching)
+        assertFalse(NothingWaiting().isFetching)
         assertFalse(CouldNotLoad("timed out").isFetching)
     }
 }

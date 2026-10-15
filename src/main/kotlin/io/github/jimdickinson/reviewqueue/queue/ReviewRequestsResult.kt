@@ -3,7 +3,10 @@ package io.github.jimdickinson.reviewqueue.queue
 import java.time.Instant
 
 sealed interface ReviewRequestsResult {
-    data class Success(val requests: List<ReviewRequest>) : ReviewRequestsResult
+    data class Success(
+        val requests: List<ReviewRequest>,
+        val warnings: List<String> = emptyList(),
+    ) : ReviewRequestsResult
 
     sealed interface Failure : ReviewRequestsResult
     data object NotSignedIn : Failure

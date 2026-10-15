@@ -92,6 +92,58 @@ class GitHubReviewSourceFailuresTest {
         assertEquals(ReviewRequestsResult.RateLimited(resetAt = null), fetch(viewer, GraphQlResponse.Body(partialQueue)))
     }
 
+    @Test
+    fun `an answer without errors has no warnings`() {
+        assertEquals(emptyList<String>(), warningsFrom(reviewQueueResponse(emptyList())))
+    }
+
+    @Test
+    fun `an error alongside data that came back is passed on as a warning with GitHub's message`() {
+        val partialQueue = withError(reviewQueueResponse(emptyList()), type = "NOT_FOUND", message = "Could not resolve to a Team")
+
+        assertEquals(listOf("Could not resolve to a Team"), warningsFrom(partialQueue))
+    }
+
+    @Test
+    fun `organisations behind SAML single sign-on are explained in a warning`() {
+        val partialQueue = withError(
+            reviewQueueResponse(emptyList(), hiddenOrganisations = 1),
+            type = "FORBIDDEN",
+            message = "Resource protected by organization SAML enforcement. You must grant your OAuth token access to this organization.",
+        )
+
+        val warning = warningsFrom(partialQueue).single()
+        assertTrue(warning, "SAML single sign-on" in warning)
+    }
+
+    @Test
+    fun `several organisations behind SAML single sign-on give a single warning`() {
+        val samlError = "FORBIDDEN" to "Resource protected by organization SAML enforcement."
+        val partialQueue = withErrors(reviewQueueResponse(emptyList(), hiddenOrganisations = 2), samlError, samlError)
+
+        assertEquals(1, warningsFrom(partialQueue).size)
+    }
+
+    @Test
+    fun `the same error repeated gives a single warning`() {
+        val error = "NOT_FOUND" to "Could not resolve to a Team"
+        val partialQueue = withErrors(reviewQueueResponse(emptyList()), error, error)
+
+        assertEquals(listOf("Could not resolve to a Team"), warningsFrom(partialQueue))
+    }
+
+    @Test
+    fun `an error alongside your login is passed on as a warning too`() {
+        val viewerWithError = GraphQlResponse.Body(withError(viewerResponse("octocat"), type = "NOT_FOUND", message = "Something was hidden"))
+
+        val result = fetch(viewerWithError, GraphQlResponse.Body(reviewQueueResponse(emptyList())))
+
+        assertEquals(listOf("Something was hidden"), (result as ReviewRequestsResult.Success).warnings)
+    }
+
+    private fun warningsFrom(reviewQueueBody: String): List<String> =
+        (fetch(viewer, GraphQlResponse.Body(reviewQueueBody)) as ReviewRequestsResult.Success).warnings
+
     private fun fetch(vararg responses: GraphQlResponse): ReviewRequestsResult =
         runBlocking { GitHubReviewSource(FakeGitHubGraphQl(*responses)).fetchReviewRequests() }
 }
