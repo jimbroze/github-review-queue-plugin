@@ -1,19 +1,33 @@
 package io.github.jimdickinson.reviewqueue.toolwindow
 
 import com.intellij.openapi.Disposable
+import com.intellij.ide.impl.ProjectUtil
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
+import io.github.jimdickinson.reviewqueue.ide.GitHubPluginPullRequestViewer
+import io.github.jimdickinson.reviewqueue.ide.IdeFirstPullRequestOpener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Clock
 
 @Service(Service.Level.PROJECT)
-class ReviewQueueService(private val scope: CoroutineScope) {
+class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
+    private val ideFirstOpener = IdeFirstPullRequestOpener(
+        currentProject = project,
+        openProjects = { ProjectManager.getInstance().openProjects.toList() },
+        viewer = GitHubPluginPullRequestViewer,
+        bringToFront = { ApplicationManager.getApplication().invokeLater { ProjectUtil.focusProjectWindow(it, true) } },
+        browser = BrowserPullRequestOpener,
+    )
+
     private val viewModel = ReviewQueueViewModel(
         source = ideAccountReviewRequests,
-        opener = BrowserPullRequestOpener,
+        opener = { pullRequest, url -> scope.launch { ideFirstOpener.open(pullRequest, url) } },
         clock = Clock.systemUTC(),
     )
 
