@@ -5,6 +5,7 @@ import io.github.jimdickinson.reviewqueue.queue.RepositoryName
 import io.github.jimdickinson.reviewqueue.timeline.Reviewer
 import io.github.jimdickinson.reviewqueue.timeline.TimelineEvent
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -16,12 +17,16 @@ internal data class ReviewQueueData(val teamSlugs: Set<String>, val pullRequests
 internal data class SearchedPullRequest(
     val ref: PullRequestRef,
     val title: String,
+    val authorLogin: String,
+    val isDraft: Boolean,
     val url: String,
     val createdAt: Instant,
     val timeline: List<TimelineEvent>,
 )
 
 private const val DRAFT_REVIEW_STATE = "PENDING"
+
+private const val DELETED_USER_LOGIN = "ghost"
 
 internal fun parseViewerLogin(data: JsonObject): String = data.obj("viewer").string("login")
 
@@ -44,11 +49,16 @@ private fun searchedPullRequest(pullRequest: JsonObject): SearchedPullRequest {
             pullRequest.getValue("number").jsonPrimitive.long,
         ),
         title = pullRequest.string("title"),
+        authorLogin = authorLogin(pullRequest),
+        isDraft = pullRequest.getValue("isDraft").jsonPrimitive.boolean,
         url = pullRequest.string("url"),
         createdAt = pullRequest.instant("createdAt"),
         timeline = pullRequest.obj("timelineItems").nodes().mapNotNull(::timelineEvent),
     )
 }
+
+private fun authorLogin(pullRequest: JsonObject): String =
+    (pullRequest["author"] as? JsonObject)?.string("login") ?: DELETED_USER_LOGIN
 
 private fun timelineEvent(item: JsonObject): TimelineEvent? = when (item.string("__typename")) {
     "ReviewRequestedEvent" -> requestedReviewer(item)?.let { TimelineEvent.ReviewRequested(item.instant("createdAt"), it) }

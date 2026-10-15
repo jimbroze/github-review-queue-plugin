@@ -26,12 +26,12 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
         return ReviewRequest(
             pullRequest = pullRequest.ref,
             title = pullRequest.title,
-            authorLogin = "",
+            authorLogin = pullRequest.authorLogin,
             url = pullRequest.url,
             requestedAt = pending.requestedAt,
             requestedReviewer = pending.requestedReviewer,
             isReReview = pending.isReReview,
-            isDraft = false,
+            isDraft = pullRequest.isDraft,
         )
     }
 
@@ -40,7 +40,7 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
         PendingReview(pullRequest.createdAt, RequestedReviewer.You, isReReview = false)
 
     private companion object {
-        const val SEARCH_QUERY = "is:pr is:open archived:false review-requested:@me"
+        const val SEARCH_QUERY = "is:pr is:open archived:false review-requested:@me -assignee:@me"
 
         const val VIEWER_QUERY = "query Viewer { viewer { login } }"
 
@@ -58,6 +58,8 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
                   ... on PullRequest {
                     number
                     title
+                    isDraft
+                    author { login }
                     url
                     createdAt
                     repository { name owner { login } }

@@ -2,7 +2,8 @@ package io.github.jimdickinson.reviewqueue.queue
 
 object ReviewQueue {
     private val reviewPriority: Comparator<ReviewRequest> =
-        compareByDescending<ReviewRequest> { it.isReReview }
+        compareBy<ReviewRequest> { it.isDraft }
+            .thenByDescending { it.isReReview }
             .thenBy { it.requestedAt }
             .thenByDescending { it.requestedReviewer == RequestedReviewer.You }
 

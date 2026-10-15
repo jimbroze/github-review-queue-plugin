@@ -66,11 +66,11 @@ class ReviewQueueViewModel(
     private fun rowFor(request: ReviewRequest) = ReviewRow(
         pullRequestLabel = labelFor(request.pullRequest),
         title = request.title,
-        authorLogin = "",
+        authorLogin = request.authorLogin,
         waitingFor = timeSince(request.requestedAt),
         requestedFrom = requestedFromText(request.requestedReviewer),
         isReReview = request.isReReview,
-        isDraft = false,
+        isDraft = request.isDraft,
         pullRequest = request.pullRequest,
         url = request.url,
     )
