@@ -18,7 +18,7 @@ import org.jetbrains.plugins.github.util.GHGitRepositoryMapping
 import kotlin.time.Duration.Companion.seconds
 
 object GitHubPluginPullRequestViewer : PullRequestViewer<Project> {
-    private val waitForGitHubPlugin = 10.seconds
+    private val waitForGitHubPlugin = 3.seconds
 
     override suspend fun hasRepository(project: Project, repository: RepositoryName): Boolean =
         failingSafe("check ${project.name} for $repository") { mappingFor(project, repository) != null }

@@ -10,6 +10,7 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
 import io.github.jimdickinson.reviewqueue.ide.GitHubPluginPullRequestViewer
 import io.github.jimdickinson.reviewqueue.ide.IdeFirstPullRequestOpener
+import io.github.jimdickinson.reviewqueue.ide.hasGitRemotes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,7 +21,7 @@ class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
     private val ideFirstOpener = IdeFirstPullRequestOpener(
         currentProject = project,
         openProjects = { ProjectManager.getInstance().openProjects.toList() },
-        hasGitRemotes = { TODO() },
+        hasGitRemotes = ::hasGitRemotes,
         viewer = GitHubPluginPullRequestViewer,
         bringToFront = { ApplicationManager.getApplication().invokeLater { ProjectUtil.focusProjectWindow(it, true) } },
         browser = BrowserPullRequestOpener,

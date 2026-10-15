@@ -22,12 +22,15 @@ class IdeFirstPullRequestOpener<P>(
     }
 
     private suspend fun preferredProjectWith(repository: RepositoryName): P? = coroutineScope {
-        val candidates = listOf(currentProject) + openProjects().filter { it != currentProject }
+        val candidates = projectsInPreferenceOrder().filter(hasGitRemotes)
         val answers = candidates.map { async { viewer.hasRepository(it, repository) } }
         val preferred = candidates.zip(answers).firstOrNull { (_, hasRepository) -> hasRepository.await() }?.first
         answers.forEach { it.cancel() }
         preferred
     }
+
+    private fun projectsInPreferenceOrder(): List<P> =
+        listOf(currentProject) + openProjects().filter { it != currentProject }
 
     private suspend fun showIn(project: P, pullRequest: PullRequestRef): Boolean {
         if (project != currentProject) bringToFront(project)
