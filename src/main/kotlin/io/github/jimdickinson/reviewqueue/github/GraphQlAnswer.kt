@@ -8,12 +8,14 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 internal sealed interface GraphQlAnswer<out T> {
-    data class Answered<T>(val value: T) : GraphQlAnswer<T>
+    data class Answered<T>(val value: T, val warnings: List<String>) : GraphQlAnswer<T>
     data class Refused(val failure: ReviewRequestsResult.Failure) : GraphQlAnswer<Nothing>
 }
 
-internal inline fun <T> GraphQlAnswer<T>.valueOr(onRefused: (ReviewRequestsResult.Failure) -> Nothing): T = when (this) {
-    is GraphQlAnswer.Answered -> value
+internal inline fun <T> GraphQlAnswer<T>.answeredOr(
+    onRefused: (ReviewRequestsResult.Failure) -> Nothing,
+): GraphQlAnswer.Answered<T> = when (this) {
+    is GraphQlAnswer.Answered -> this
     is GraphQlAnswer.Refused -> onRefused(failure)
 }
 
@@ -38,7 +40,7 @@ private fun <T> answer(body: JsonObject, parse: (JsonObject) -> T): GraphQlAnswe
     val data = body["data"] as? JsonObject
     return when {
         errors.any(::isRateLimit) -> GraphQlAnswer.Refused(ReviewRequestsResult.RateLimited(resetAt = null))
-        data != null -> GraphQlAnswer.Answered(parse(data))
+        data != null -> GraphQlAnswer.Answered(parse(data), warnings(errors))
         else -> GraphQlAnswer.Refused(ReviewRequestsResult.Failed(failureReason(errors)))
     }
 }
@@ -46,7 +48,18 @@ private fun <T> answer(body: JsonObject, parse: (JsonObject) -> T): GraphQlAnswe
 private fun errors(body: JsonObject): List<JsonObject> =
     (body["errors"] as? JsonArray).orEmpty().map { it.jsonObject }
 
-private fun isRateLimit(error: JsonObject) = error["type"]?.jsonPrimitive?.content == "RATE_LIMITED"
+private fun isRateLimit(error: JsonObject) = type(error) == "RATE_LIMITED"
+
+private fun isSamlEnforcement(error: JsonObject) = type(error) == "FORBIDDEN" && "SAML" in message(error)
+
+private fun warnings(errors: List<JsonObject>): List<String> =
+    errors.map { if (isSamlEnforcement(it)) SAML_WARNING else message(it) }.distinct()
+
+private const val SAML_WARNING =
+    "Some organisations require SAML single sign-on for your GitHub token, so their review requests may be missing. " +
+        "Authorise the token for those organisations on GitHub."
+
+private fun type(error: JsonObject) = error["type"]?.jsonPrimitive?.content
 
 private fun failureReason(errors: List<JsonObject>) =
     errors.joinToString("; ", transform = ::message).ifEmpty { "GitHub answered without data" }

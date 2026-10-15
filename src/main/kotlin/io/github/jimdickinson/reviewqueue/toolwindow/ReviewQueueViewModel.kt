@@ -49,18 +49,18 @@ class ReviewQueueViewModel(
         }
 
     private fun stateFor(result: ReviewRequestsResult): ReviewQueueState = when (result) {
-        is Success -> stateFor(result.requests)
+        is Success -> stateFor(result.requests, result.warnings)
         NotSignedIn -> ReviewQueueState.NeedsSignIn
         Unauthorized -> ReviewQueueState.SignInExpired
         is RateLimited -> ReviewQueueState.RateLimited(result.resetAt?.let { timeUntil(it) })
         is Failed -> ReviewQueueState.CouldNotLoad(result.reason)
     }
 
-    private fun stateFor(requests: List<ReviewRequest>): ReviewQueueState =
+    private fun stateFor(requests: List<ReviewRequest>, warnings: List<String>): ReviewQueueState =
         if (requests.isEmpty()) {
-            ReviewQueueState.NothingWaiting()
+            ReviewQueueState.NothingWaiting(warnings)
         } else {
-            ReviewQueueState.Showing(ReviewQueue.order(requests).map(::rowFor), isRefreshing = false)
+            ReviewQueueState.Showing(ReviewQueue.order(requests).map(::rowFor), isRefreshing = false, warnings)
         }
 
     private fun rowFor(request: ReviewRequest) = ReviewRow(

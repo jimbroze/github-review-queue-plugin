@@ -13,12 +13,15 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
     suspend fun fetchReviewRequests(): ReviewRequestsResult {
         val login = graphQl.query(VIEWER_QUERY, emptyMap())
             .answer(::parseViewerLogin)
-            .valueOr { return it }
-        val reviewQueue = graphQl.query(REVIEW_QUEUE_QUERY, mapOf("login" to login, "searchQuery" to SEARCH_QUERY))
+            .answeredOr { return it }
+        val reviewQueue = graphQl.query(REVIEW_QUEUE_QUERY, mapOf("login" to login.value, "searchQuery" to SEARCH_QUERY))
             .answer(::parseReviewQueue)
-            .valueOr { return it }
-        val viewer = Viewer(login, reviewQueue.teamSlugs)
-        return ReviewRequestsResult.Success(reviewQueue.pullRequests.map { reviewRequest(it, viewer) })
+            .answeredOr { return it }
+        val viewer = Viewer(login.value, reviewQueue.value.teamSlugs)
+        return ReviewRequestsResult.Success(
+            requests = reviewQueue.value.pullRequests.map { reviewRequest(it, viewer) },
+            warnings = (login.warnings + reviewQueue.warnings).distinct(),
+        )
     }
 
     private fun reviewRequest(pullRequest: SearchedPullRequest, viewer: Viewer): ReviewRequest {

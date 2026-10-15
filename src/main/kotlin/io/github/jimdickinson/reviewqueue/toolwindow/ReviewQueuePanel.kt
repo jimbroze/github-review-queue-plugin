@@ -9,8 +9,11 @@ import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.util.text.HtmlBuilder
+import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
@@ -18,6 +21,7 @@ import com.intellij.ui.components.JBLoadingPanel
 import java.awt.BorderLayout
 import java.awt.Point
 import java.awt.event.MouseEvent
+import javax.swing.JPanel
 
 class ReviewQueuePanel(
     parentDisposable: Disposable,
@@ -31,11 +35,15 @@ class ReviewQueuePanel(
         fitRowsToVisibleWidth()
     }
     private val loadingPanel = JBLoadingPanel(BorderLayout(), parentDisposable)
+    private val warningBanner = EditorNotificationPanel(EditorNotificationPanel.Status.Warning).apply { isVisible = false }
     private var isFetching = false
 
     init {
         loadingPanel.add(ScrollPaneFactory.createScrollPane(list, true))
-        setContent(loadingPanel)
+        setContent(JPanel(BorderLayout()).apply {
+            add(warningBanner, BorderLayout.NORTH)
+            add(loadingPanel, BorderLayout.CENTER)
+        })
         setToolbar(createToolbar())
         openRowOnDoubleClick()
         openSelectedRowOnEnter()
@@ -45,7 +53,18 @@ class ReviewQueuePanel(
         isFetching = state.isFetching
         rows.replaceAll((state as? ReviewQueueState.Showing)?.rows.orEmpty())
         showStatus(state)
+        showWarnings(state.warnings)
         if (isFetching) loadingPanel.startLoading() else loadingPanel.stopLoading()
+    }
+
+    private fun showWarnings(warnings: List<String>) {
+        val text = HtmlBuilder()
+            .appendWithSeparators(HtmlChunk.br(), warnings.map(HtmlChunk::text))
+            .wrapWithHtmlBody()
+            .toString()
+        warningBanner.text = text
+        warningBanner.toolTipText = text
+        warningBanner.isVisible = warnings.isNotEmpty()
     }
 
     private fun showStatus(state: ReviewQueueState) {
