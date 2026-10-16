@@ -22,7 +22,7 @@ class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
         source = ideAccountReviewRequests,
         opener = { pullRequest, url -> scope.launch { ideFirstOpener.open(pullRequest, url) } },
         clock = Clock.systemUTC(),
-        timing = ReviewTiming.defaultsIn(ZoneId.systemDefault()),
+        preferences = QueuePreferences(timing = ReviewTiming.defaultsIn(ZoneId.systemDefault())),
     )
 
     init {

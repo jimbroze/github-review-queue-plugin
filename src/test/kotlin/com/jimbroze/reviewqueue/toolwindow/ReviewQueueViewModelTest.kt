@@ -14,6 +14,7 @@ import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.Showing
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.SignInExpired
 import com.jimbroze.reviewqueue.worktime.ReviewTiming
 import com.jimbroze.reviewqueue.worktime.Urgency
+import com.jimbroze.reviewqueue.worktime.WorkHours
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -28,8 +29,10 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -37,7 +40,7 @@ class ReviewQueueViewModelTest {
 
     private val now = Instant.parse("2026-10-15T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
-    private val timing = ReviewTiming.defaultsIn(ZoneOffset.UTC)
+    private val preferences = QueuePreferences(timing = ReviewTiming.defaultsIn(ZoneOffset.UTC))
     private val openedPullRequests = mutableListOf<Pair<PullRequestRef, String>>()
     private val recordingOpener = PullRequestOpener { pullRequest, url -> openedPullRequests += pullRequest to url }
 
@@ -51,7 +54,7 @@ class ReviewQueueViewModelTest {
     @Test
     fun `the first load shows loading`() = runBlocking {
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
-        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock, timing)
+        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock, preferences)
 
         assertEquals(Loading, stateWhileFetching(viewModel, stillFetching))
     }
@@ -61,7 +64,7 @@ class ReviewQueueViewModelTest {
         val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
         val responses = ArrayDeque(listOf(loaded, stillFetching))
-        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, timing)
+        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, preferences)
         viewModel.refresh()
 
         val state = stateWhileFetching(viewModel, stillFetching) as Showing
@@ -243,7 +246,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a fetch that throws unexpectedly shows that the queue could not load`() = runBlocking {
-        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock, timing)
+        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock, preferences)
         viewModel.refresh()
 
         assertEquals(CouldNotLoad("connection reset"), viewModel.state.value)
@@ -251,7 +254,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a cancelled fetch is not shown as a failure`() {
-        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock, timing)
+        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock, preferences)
 
         assertThrows(CancellationException::class.java) { runBlocking { viewModel.refresh() } }
         assertFalse(viewModel.state.value is CouldNotLoad)
@@ -293,7 +296,7 @@ class ReviewQueueViewModelTest {
             { fetches++; ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1))))) },
             recordingOpener,
             movableClock,
-            timing,
+            preferences,
         )
         viewModel.refresh()
         val ticks = MutableSharedFlow<Unit>()
@@ -316,7 +319,7 @@ class ReviewQueueViewModelTest {
             { ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1)))), warnings = listOf("Some teams are hidden")) },
             recordingOpener,
             movableClock,
-            timing,
+            preferences,
         )
         viewModel.refresh()
         val ticks = MutableSharedFlow<Unit>()
@@ -348,6 +351,80 @@ class ReviewQueueViewModelTest {
         emit(Unit)
         yield()
     }
+
+    @Test
+    fun `new overdue times recolour the rows without fetching again`() = runBlocking {
+        var fetches = 0
+        val viewModel = ReviewQueueViewModel(
+            { fetches++; ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(2))))) },
+            recordingOpener,
+            clock,
+            preferences,
+        )
+        viewModel.refresh()
+
+        viewModel.usePreferences(preferencesWithTiming(nearlyOverdueAfter = Duration.ofHours(1), overdueAfter = Duration.ofHours(2)))
+
+        assertEquals(Urgency.Overdue, (viewModel.state.value as Showing).rows.single().urgency)
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `new work hours change the waiting time shown`() = runBlocking {
+        val viewModel = viewModelReturning(ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(2))))))
+        viewModel.refresh()
+
+        viewModel.usePreferences(QueuePreferences(timing = ReviewTiming(
+            WorkHours(LocalTime.of(11, 0), LocalTime.of(18, 0), DayOfWeek.entries.toSet(), ZoneOffset.UTC),
+            nearlyOverdueAfter = Duration.ofHours(3),
+            overdueAfter = Duration.ofHours(4),
+        )))
+
+        assertEquals("1 hour", (viewModel.state.value as Showing).rows.single().waitingFor)
+    }
+
+    @Test
+    fun `new preferences keep the rows visible while a refresh is running`() = runBlocking {
+        val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
+        val stillFetching = CompletableDeferred<ReviewRequestsResult>()
+        val responses = ArrayDeque(listOf(loaded, stillFetching))
+        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, preferences)
+        viewModel.refresh()
+
+        val state = coroutineScope {
+            val refresh = launch { viewModel.refresh() }
+            yield()
+            viewModel.usePreferences(preferencesWithTiming(nearlyOverdueAfter = Duration.ofHours(5), overdueAfter = Duration.ofHours(6)))
+            val state = viewModel.state.value
+            stillFetching.complete(ReviewRequestsResult.Success(emptyList()))
+            refresh.join()
+            state
+        }
+
+        assertTrue((state as Showing).isRefreshing)
+    }
+
+    @Test
+    fun `new preferences before the first load leave the queue loading`() {
+        val viewModel = viewModelReturning(ReviewRequestsResult.Success(emptyList()))
+
+        viewModel.usePreferences(preferencesWithTiming(nearlyOverdueAfter = Duration.ofHours(1), overdueAfter = Duration.ofHours(2)))
+
+        assertEquals(Loading, viewModel.state.value)
+    }
+
+    @Test
+    fun `new preferences leave other messages alone`() = runBlocking {
+        val viewModel = viewModelReturning(ReviewRequestsResult.Failed("timed out"))
+        viewModel.refresh()
+
+        viewModel.usePreferences(preferencesWithTiming(nearlyOverdueAfter = Duration.ofHours(1), overdueAfter = Duration.ofHours(2)))
+
+        assertEquals(CouldNotLoad("timed out"), viewModel.state.value)
+    }
+
+    private fun preferencesWithTiming(nearlyOverdueAfter: Duration, overdueAfter: Duration) =
+        QueuePreferences(timing = ReviewTiming(WorkHours.officeHours(ZoneOffset.UTC), nearlyOverdueAfter, overdueAfter))
 
     private class MovableClock(@Volatile var now: Instant) : Clock() {
         override fun instant(): Instant = now
@@ -392,7 +469,7 @@ class ReviewQueueViewModelTest {
 
     private fun viewModelReturning(vararg results: ReviewRequestsResult): ReviewQueueViewModel {
         val remaining = ArrayDeque(results.toList())
-        return ReviewQueueViewModel({ remaining.removeFirst() }, recordingOpener, clock, timing)
+        return ReviewQueueViewModel({ remaining.removeFirst() }, recordingOpener, clock, preferences)
     }
 
     private fun stateAfterRefresh(result: ReviewRequestsResult): ReviewQueueState = runBlocking {

@@ -10,7 +10,6 @@ import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.NotSignedIn
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.RateLimited
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.Success
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.Unauthorized
-import com.jimbroze.reviewqueue.worktime.ReviewTiming
 import com.jimbroze.reviewqueue.worktime.Urgency
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -26,11 +25,11 @@ class ReviewQueueViewModel(
     private val source: ReviewRequestsSource,
     private val opener: PullRequestOpener,
     private val clock: Clock,
-    private val timing: ReviewTiming,
+    private var preferences: QueuePreferences,
 ) {
     private val mutableState = MutableStateFlow<ReviewQueueState>(ReviewQueueState.Loading)
     private val stateLock = Any()
-    private var shownRequests: List<ReviewRequest> = emptyList()
+    private var loadedQueue: Success? = null
 
     val state: StateFlow<ReviewQueueState> = mutableState.asStateFlow()
 
@@ -42,6 +41,12 @@ class ReviewQueueViewModel(
     /** Recalculates the shown waiting times on each of [ticks], without fetching. */
     suspend fun keepWaitingTimesCurrent(ticks: Flow<Unit>) {
         ticks.collect { showCurrentWaitingTimes() }
+    }
+
+    /** Shows the loaded queue with [newPreferences], without fetching. */
+    fun usePreferences(newPreferences: QueuePreferences) = synchronized(stateLock) {
+        preferences = newPreferences
+        showLoadedQueueAgain()
     }
 
     fun open(row: ReviewRow) {
@@ -61,39 +66,50 @@ class ReviewQueueViewModel(
         }
 
     private fun show(result: ReviewRequestsResult) = synchronized(stateLock) {
-        shownRequests = if (result is Success) ReviewQueue.order(result.requests) else emptyList()
+        loadedQueue = result as? Success
         mutableState.value = stateFor(result)
     }
 
     private fun showCurrentWaitingTimes() = synchronized(stateLock) {
+        showLoadedQueueAgain()
+    }
+
+    private fun showLoadedQueueAgain() {
+        val queue = loadedQueue ?: return
         mutableState.update { current ->
-            if (current is ReviewQueueState.Showing) current.copy(rows = shownRequests.map(::rowFor)) else current
+            when (current) {
+                is ReviewQueueState.Showing -> stateFor(queue, isRefreshing = current.isRefreshing)
+                is ReviewQueueState.NothingWaiting -> stateFor(queue)
+                else -> current
+            }
         }
     }
 
     private fun stateFor(result: ReviewRequestsResult): ReviewQueueState = when (result) {
-        is Success -> stateFor(shownRequests, result.warnings)
+        is Success -> stateFor(result)
         NotSignedIn -> ReviewQueueState.NeedsSignIn
         Unauthorized -> ReviewQueueState.SignInExpired
         is RateLimited -> ReviewQueueState.RateLimited(result.resetAt?.let { timeUntil(it) })
         is Failed -> ReviewQueueState.CouldNotLoad(result.reason)
     }
 
-    private fun stateFor(orderedRequests: List<ReviewRequest>, warnings: List<String>): ReviewQueueState =
-        if (orderedRequests.isEmpty()) {
-            ReviewQueueState.NothingWaiting(warnings)
+    private fun stateFor(queue: Success, isRefreshing: Boolean = false): ReviewQueueState {
+        val shownRequests = ReviewQueue.order(queue.requests)
+        return if (shownRequests.isEmpty()) {
+            ReviewQueueState.NothingWaiting(queue.warnings)
         } else {
-            ReviewQueueState.Showing(orderedRequests.map(::rowFor), isRefreshing = false, warnings)
+            ReviewQueueState.Showing(shownRequests.map(::rowFor), isRefreshing, queue.warnings)
         }
+    }
 
     private fun rowFor(request: ReviewRequest): ReviewRow {
-        val workingTimeWaited = timing.workHours.workingTimeBetween(request.requestedAt, clock.instant())
+        val workingTimeWaited = preferences.timing.workHours.workingTimeBetween(request.requestedAt, clock.instant())
         return ReviewRow(
             pullRequestLabel = labelFor(request.pullRequest),
             title = request.title,
             authorLogin = request.authorLogin,
-            waitingFor = WorkingTimeText.of(workingTimeWaited, timing.workHours.dayLength),
-            urgency = if (request.isDraft) Urgency.OnTime else timing.urgencyAfter(workingTimeWaited),
+            waitingFor = WorkingTimeText.of(workingTimeWaited, preferences.timing.workHours.dayLength),
+            urgency = if (request.isDraft) Urgency.OnTime else preferences.timing.urgencyAfter(workingTimeWaited),
             requestedFrom = requestedFromText(request.requestedReviewer),
             isReReview = request.isReReview,
             isDraft = request.isDraft,
