@@ -6,10 +6,12 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.jimbroze.reviewqueue.ide.ideFirstPullRequestOpener
+import com.jimbroze.reviewqueue.worktime.ReviewTiming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.ZoneId
 
 @Service(Service.Level.PROJECT)
 class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
@@ -19,6 +21,7 @@ class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
         source = ideAccountReviewRequests,
         opener = { pullRequest, url -> scope.launch { ideFirstOpener.open(pullRequest, url) } },
         clock = Clock.systemUTC(),
+        timing = ReviewTiming.defaultsIn(ZoneId.systemDefault()),
     )
 
     fun refresh() {

@@ -12,6 +12,8 @@ import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.NothingWaiting
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.RateLimited
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.Showing
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.SignInExpired
+import com.jimbroze.reviewqueue.worktime.ReviewTiming
+import com.jimbroze.reviewqueue.worktime.WorkHours
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
@@ -32,6 +34,7 @@ class ReviewQueueViewModelTest {
 
     private val now = Instant.parse("2026-10-15T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val timing = ReviewTiming(WorkHours.officeHours(ZoneOffset.UTC))
     private val openedPullRequests = mutableListOf<Pair<PullRequestRef, String>>()
     private val recordingOpener = PullRequestOpener { pullRequest, url -> openedPullRequests += pullRequest to url }
 
@@ -45,7 +48,7 @@ class ReviewQueueViewModelTest {
     @Test
     fun `the first load shows loading`() = runBlocking {
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
-        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock)
+        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock, timing)
 
         assertEquals(Loading, stateWhileFetching(viewModel, stillFetching))
     }
@@ -55,7 +58,7 @@ class ReviewQueueViewModelTest {
         val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
         val responses = ArrayDeque(listOf(loaded, stillFetching))
-        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock)
+        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, timing)
         viewModel.refresh()
 
         val state = stateWhileFetching(viewModel, stillFetching) as Showing
@@ -97,10 +100,24 @@ class ReviewQueueViewModelTest {
     }
 
     @Test
-    fun `a row shows how long the review has been waiting`() {
-        val row = refreshedRows(request(requestedAt = now.minus(Duration.ofDays(3)))).single()
+    fun `a row shows how much working time the review has been waiting`() {
+        val row = refreshedRows(request(requestedAt = Instant.parse("2026-10-14T15:00:00Z"))).single()
 
-        assertEquals("3 days", row.waitingFor)
+        assertEquals("5 hours", row.waitingFor)
+    }
+
+    @Test
+    fun `time outside working hours is not counted in the wait`() {
+        val row = refreshedRows(request(requestedAt = Instant.parse("2026-10-14T20:00:00Z"))).single()
+
+        assertEquals("3 hours", row.waitingFor)
+    }
+
+    @Test
+    fun `a wait of a working day or more is shown in work days`() {
+        val row = refreshedRows(request(requestedAt = Instant.parse("2026-10-12T12:00:00Z"))).single()
+
+        assertEquals("3 work days", row.waitingFor)
     }
 
     @Test
@@ -223,7 +240,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a fetch that throws unexpectedly shows that the queue could not load`() = runBlocking {
-        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock)
+        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock, timing)
         viewModel.refresh()
 
         assertEquals(CouldNotLoad("connection reset"), viewModel.state.value)
@@ -231,7 +248,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a cancelled fetch is not shown as a failure`() {
-        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock)
+        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock, timing)
 
         assertThrows(CancellationException::class.java) { runBlocking { viewModel.refresh() } }
         assertFalse(viewModel.state.value is CouldNotLoad)
@@ -272,7 +289,7 @@ class ReviewQueueViewModelTest {
 
     private fun viewModelReturning(vararg results: ReviewRequestsResult): ReviewQueueViewModel {
         val remaining = ArrayDeque(results.toList())
-        return ReviewQueueViewModel({ remaining.removeFirst() }, recordingOpener, clock)
+        return ReviewQueueViewModel({ remaining.removeFirst() }, recordingOpener, clock, timing)
     }
 
     private fun stateAfterRefresh(result: ReviewRequestsResult): ReviewQueueState = runBlocking {

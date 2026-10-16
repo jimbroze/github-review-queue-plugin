@@ -10,6 +10,7 @@ import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.NotSignedIn
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.RateLimited
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.Success
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult.Unauthorized
+import com.jimbroze.reviewqueue.worktime.ReviewTiming
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,7 @@ class ReviewQueueViewModel(
     private val source: ReviewRequestsSource,
     private val opener: PullRequestOpener,
     private val clock: Clock,
+    private val timing: ReviewTiming,
 ) {
     private val mutableState = MutableStateFlow<ReviewQueueState>(ReviewQueueState.Loading)
 
@@ -67,7 +69,7 @@ class ReviewQueueViewModel(
         pullRequestLabel = labelFor(request.pullRequest),
         title = request.title,
         authorLogin = request.authorLogin,
-        waitingFor = timeSince(request.requestedAt),
+        waitingFor = workingTimeSince(request.requestedAt),
         requestedFrom = requestedFromText(request.requestedReviewer),
         isReReview = request.isReReview,
         isDraft = request.isDraft,
@@ -83,7 +85,10 @@ class ReviewQueueViewModel(
         is RequestedReviewer.Team -> "@${reviewer.slug}"
     }
 
-    private fun timeSince(moment: Instant): String = DurationText.of(Duration.between(moment, clock.instant()))
+    private fun workingTimeSince(moment: Instant): String {
+        val workHours = timing.workHours
+        return WorkingTimeText.of(workHours.workingTimeBetween(moment, clock.instant()), workHours.dayLength)
+    }
 
     private fun timeUntil(moment: Instant): String = DurationText.of(Duration.between(clock.instant(), moment))
 }
