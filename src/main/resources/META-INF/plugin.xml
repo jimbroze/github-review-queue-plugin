@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>io.github.jimdickinson.reviewqueue</id>
+    <id>com.jimbroze.reviewqueue</id>
     <name>Review Queue</name>
     <vendor>jimbroze</vendor>
     <description><![CDATA[
@@ -15,11 +15,11 @@
         <toolWindow id="Review Queue"
                     anchor="right"
                     icon="AllIcons.Vcs.Vendors.Github"
-                    factoryClass="io.github.jimdickinson.reviewqueue.ReviewQueueToolWindowFactory"/>
+                    factoryClass="com.jimbroze.reviewqueue.ReviewQueueToolWindowFactory"/>
         <notificationGroup id="Review Queue" displayType="BALLOON"/>
         <applicationConfigurable parentId="tools"
-                                 id="io.github.jimdickinson.reviewqueue.settings"
-                                 instance="io.github.jimdickinson.reviewqueue.settings.ReviewQueueConfigurable"
+                                 id="com.jimbroze.reviewqueue.settings"
+                                 instance="com.jimbroze.reviewqueue.settings.ReviewQueueConfigurable"
                                  bundle="messages.ReviewQueueBundle"
                                  key="settings.displayName"/>
     </extensions>
