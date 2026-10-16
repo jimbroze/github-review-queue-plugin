@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.jimbroze.reviewqueue.worktime.Urgency
 import icons.CollaborationToolsIcons
 import org.jetbrains.plugins.github.GithubIcons
 import java.awt.BorderLayout
@@ -59,8 +60,9 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
         hasFocus: Boolean,
     ): Component {
         val foreground = UIUtil.getListForeground(selected, list.hasFocus())
+        val isHighlightedForSelection = selected && list.hasFocus()
         showTitle(row, foreground)
-        showDetails(row, foreground)
+        showDetails(row, foreground, if (isHighlightedForSelection) foreground else urgencyColour(row.urgency))
         cell.background = UIUtil.getListBackground(selected, list.hasFocus())
         return cell
     }
@@ -73,13 +75,22 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
         reReviewPill.isVisible = row.isReReview
     }
 
-    private fun showDetails(row: ReviewRow, foreground: Color) {
+    private fun showDetails(row: ReviewRow, foreground: Color, waitingTimeColour: Color?) {
         detailsLine.clear()
         detailsLine.foreground = foreground
-        detailsLine.append(ReviewQueueBundle.message("row.waiting", row.waitingFor), waitingTimeStyle)
+        detailsLine.append(ReviewQueueBundle.message("row.waiting", row.waitingFor), waitingTimeStyle(waitingTimeColour))
         appendDetail(ReviewQueueBundle.message("row.details", row.pullRequestLabel, row.authorLogin, row.requestedFrom))
         if (row.isDraft) appendDetail(ReviewQueueBundle.message("row.draft"))
     }
+
+    private fun urgencyColour(urgency: Urgency): Color? = when (urgency) {
+        Urgency.OnTime -> null
+        Urgency.NearlyOverdue -> nearlyOverdueColour
+        Urgency.Overdue -> overdueColour
+    }
+
+    private fun waitingTimeStyle(colour: Color?) =
+        SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER or SimpleTextAttributes.STYLE_BOLD, colour)
 
     private fun appendDetail(text: String) {
         detailsLine.append(SEPARATOR + text, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
@@ -94,6 +105,7 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
         const val ICON_GAP = 6
         const val SEPARATOR = " · "
         val reReviewColour = JBColor.namedColor("Label.warningForeground", JBColor(0xA35200, 0xE5A50A))
-        val waitingTimeStyle = SimpleTextAttributes(SimpleTextAttributes.STYLE_SMALLER or SimpleTextAttributes.STYLE_BOLD, null)
+        val nearlyOverdueColour = reReviewColour
+        val overdueColour = JBColor.namedColor("Label.errorForeground", JBColor(0xC7222D, 0xFF5261))
     }
 }

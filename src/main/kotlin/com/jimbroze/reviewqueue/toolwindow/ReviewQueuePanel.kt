@@ -51,10 +51,17 @@ class ReviewQueuePanel(
 
     fun render(state: ReviewQueueState) {
         isFetching = state.isFetching
-        rows.replaceAll((state as? ReviewQueueState.Showing)?.rows.orEmpty())
+        showRowsKeepingSelection((state as? ReviewQueueState.Showing)?.rows.orEmpty())
         showStatus(state)
         showWarnings(state.warnings)
         if (isFetching) loadingPanel.startLoading() else loadingPanel.stopLoading()
+    }
+
+    private fun showRowsKeepingSelection(newRows: List<ReviewRow>) {
+        val selectedPullRequest = list.selectedValue?.pullRequest
+        rows.replaceAll(newRows)
+        val stillShownAt = newRows.indexOfFirst { it.pullRequest == selectedPullRequest }
+        if (stillShownAt >= 0) list.selectedIndex = stillShownAt
     }
 
     private fun showWarnings(warnings: List<String>) {

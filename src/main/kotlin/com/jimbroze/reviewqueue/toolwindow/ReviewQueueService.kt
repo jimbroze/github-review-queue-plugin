@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.Duration
 import java.time.ZoneId
 
 @Service(Service.Level.PROJECT)
@@ -23,6 +24,10 @@ class ReviewQueueService(project: Project, private val scope: CoroutineScope) {
         clock = Clock.systemUTC(),
         timing = ReviewTiming.defaultsIn(ZoneId.systemDefault()),
     )
+
+    init {
+        scope.launch { viewModel.keepWaitingTimesCurrent(ticksEvery(Duration.ofMinutes(1))) }
+    }
 
     fun refresh() {
         scope.launch { viewModel.refresh() }

@@ -1,6 +1,7 @@
 package com.jimbroze.reviewqueue.toolwindow
 
 import com.jimbroze.reviewqueue.queue.PullRequestRef
+import com.jimbroze.reviewqueue.worktime.Urgency
 
 sealed interface ReviewQueueState {
     val warnings: List<String> get() = emptyList()
@@ -26,6 +27,7 @@ data class ReviewRow(
     val title: String,
     val authorLogin: String,
     val waitingFor: String,
+    val urgency: Urgency,
     val requestedFrom: String,
     val isReReview: Boolean,
     val isDraft: Boolean,

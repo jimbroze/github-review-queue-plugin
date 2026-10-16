@@ -13,10 +13,12 @@ import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.RateLimited
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.Showing
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.SignInExpired
 import com.jimbroze.reviewqueue.worktime.ReviewTiming
-import com.jimbroze.reviewqueue.worktime.WorkHours
+import com.jimbroze.reviewqueue.worktime.Urgency
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
@@ -28,13 +30,14 @@ import org.junit.Test
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 class ReviewQueueViewModelTest {
 
     private val now = Instant.parse("2026-10-15T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
-    private val timing = ReviewTiming(WorkHours.officeHours(ZoneOffset.UTC))
+    private val timing = ReviewTiming.defaultsIn(ZoneOffset.UTC)
     private val openedPullRequests = mutableListOf<Pair<PullRequestRef, String>>()
     private val recordingOpener = PullRequestOpener { pullRequest, url -> openedPullRequests += pullRequest to url }
 
@@ -252,6 +255,106 @@ class ReviewQueueViewModelTest {
 
         assertThrows(CancellationException::class.java) { runBlocking { viewModel.refresh() } }
         assertFalse(viewModel.state.value is CouldNotLoad)
+    }
+
+    @Test
+    fun `a request waiting a short time is on time`() {
+        val row = refreshedRows(request(requestedAt = now.minus(Duration.ofHours(1)))).single()
+
+        assertEquals(Urgency.OnTime, row.urgency)
+    }
+
+    @Test
+    fun `a request waiting past the nearly-overdue time is nearly overdue`() {
+        val row = refreshedRows(request(requestedAt = now.minus(Duration.ofHours(3)))).single()
+
+        assertEquals(Urgency.NearlyOverdue, row.urgency)
+    }
+
+    @Test
+    fun `a request waiting past the overdue time is overdue`() {
+        val row = refreshedRows(request(requestedAt = Instant.parse("2026-10-14T16:00:00Z"))).single()
+
+        assertEquals(Urgency.Overdue, row.urgency)
+    }
+
+    @Test
+    fun `a draft is never overdue`() {
+        val row = refreshedRows(request(requestedAt = Instant.parse("2026-10-12T12:00:00Z"), isDraft = true)).single()
+
+        assertEquals(Urgency.OnTime, row.urgency)
+    }
+
+    @Test
+    fun `waiting times keep updating without fetching again`() = runBlocking {
+        val movableClock = MovableClock(now)
+        var fetches = 0
+        val viewModel = ReviewQueueViewModel(
+            { fetches++; ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1))))) },
+            recordingOpener,
+            movableClock,
+            timing,
+        )
+        viewModel.refresh()
+        val ticks = MutableSharedFlow<Unit>()
+        val updating = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepWaitingTimesCurrent(ticks) }
+
+        movableClock.now = now.plus(Duration.ofHours(3))
+        ticks.tick()
+        updating.cancel()
+
+        val row = (viewModel.state.value as Showing).rows.single()
+        assertEquals("4 hours", row.waitingFor)
+        assertEquals(Urgency.Overdue, row.urgency)
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `updating waiting times keeps the warnings`() = runBlocking {
+        val movableClock = MovableClock(now)
+        val viewModel = ReviewQueueViewModel(
+            { ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1)))), warnings = listOf("Some teams are hidden")) },
+            recordingOpener,
+            movableClock,
+            timing,
+        )
+        viewModel.refresh()
+        val ticks = MutableSharedFlow<Unit>()
+        val updating = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepWaitingTimesCurrent(ticks) }
+
+        movableClock.now = now.plus(Duration.ofHours(1))
+        ticks.tick()
+        updating.cancel()
+
+        val updated = viewModel.state.value as Showing
+        assertEquals("2 hours", updated.rows.single().waitingFor)
+        assertEquals(listOf("Some teams are hidden"), updated.warnings)
+    }
+
+    @Test
+    fun `updating waiting times leaves other messages alone`() = runBlocking {
+        val viewModel = viewModelReturning(ReviewRequestsResult.NotSignedIn)
+        viewModel.refresh()
+        val ticks = MutableSharedFlow<Unit>()
+        val updating = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepWaitingTimesCurrent(ticks) }
+
+        ticks.tick()
+        updating.cancel()
+
+        assertEquals(NeedsSignIn, viewModel.state.value)
+    }
+
+    private suspend fun MutableSharedFlow<Unit>.tick() {
+        emit(Unit)
+        yield()
+    }
+
+    private class MovableClock(@Volatile var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId): Clock = this
     }
 
     private suspend fun stateWhileFetching(
