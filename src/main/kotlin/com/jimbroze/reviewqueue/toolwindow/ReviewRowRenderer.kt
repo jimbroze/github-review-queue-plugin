@@ -22,9 +22,8 @@ import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 
 class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
-    private val titleLabel = JBLabel().apply {
+    private val titleLabel = ShrinksOnlyHorizontallyLabel().apply {
         iconTextGap = JBUI.scale(ICON_GAP)
-        minimumSize = Dimension(0, 0)
     }
     private val reReviewPill = JBLabel(ReviewQueueBundle.message("row.reReview")).apply {
         font = JBFont.small().asBold()
@@ -84,6 +83,10 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
 
     private fun appendDetail(text: String) {
         detailsLine.append(SEPARATOR + text, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
+    }
+
+    private class ShrinksOnlyHorizontallyLabel : JBLabel() {
+        override fun getMinimumSize() = Dimension(0, preferredSize.height)
     }
 
     private companion object {
