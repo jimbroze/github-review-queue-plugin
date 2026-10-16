@@ -20,6 +20,8 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBLoadingPanel
 import java.awt.BorderLayout
 import java.awt.Point
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.awt.event.MouseEvent
 import javax.swing.JPanel
 
@@ -33,6 +35,7 @@ class ReviewQueuePanel(
     private val list = JBList(rows).apply {
         cellRenderer = ReviewRowRenderer()
         fitRowsToVisibleWidth()
+        remeasureRowsWhenWidthChanges()
     }
     private val loadingPanel = JBLoadingPanel(BorderLayout(), parentDisposable)
     private val warningBanner = EditorNotificationPanel(EditorNotificationPanel.Status.Warning).apply { isVisible = false }
@@ -118,6 +121,23 @@ class ReviewQueuePanel(
 
     private fun JBList<ReviewRow>.fitRowsToVisibleWidth() {
         fixedCellWidth = 1
+    }
+
+    private fun JBList<ReviewRow>.remeasureRowsWhenWidthChanges() {
+        addComponentListener(object : ComponentAdapter() {
+            private var measuredWidth = width
+
+            override fun componentResized(event: ComponentEvent) {
+                if (width == measuredWidth) return
+                measuredWidth = width
+                remeasureRows()
+            }
+        })
+    }
+
+    private fun JBList<ReviewRow>.remeasureRows() {
+        fixedCellHeight = 0
+        fixedCellHeight = -1
     }
 
     private fun rowAt(point: Point): ReviewRow? {
