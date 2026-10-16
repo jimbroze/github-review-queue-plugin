@@ -6,6 +6,7 @@ import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.jimbroze.reviewqueue.clones.pathOrNull
+import com.jimbroze.reviewqueue.queue.SortOrder
 import com.jimbroze.reviewqueue.toolwindow.QueuePreferences
 import java.nio.file.Path
 import java.time.ZoneId
@@ -20,6 +21,7 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
         var workDays by list<String>()
         var nearlyOverdueHours by property(TimingChoice.Default.nearlyOverdueHours)
         var overdueHours by property(TimingChoice.Default.overdueHours)
+        var sortOrder by string()
     }
 
     /** Folders the user keeps clones in; entries that are not valid paths are left out. */
@@ -39,5 +41,12 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
             state.overdueHours = choice.overdueHours
         }
 
-    fun queuePreferencesIn(zone: ZoneId): QueuePreferences = QueuePreferences(timing = timing.toReviewTiming(zone))
+    var sortOrder: SortOrder
+        get() = SortOrderSetting.restore(state.sortOrder)
+        set(order) {
+            state.sortOrder = SortOrderSetting.store(order)
+        }
+
+    fun queuePreferencesIn(zone: ZoneId): QueuePreferences =
+        QueuePreferences(timing = timing.toReviewTiming(zone), sortOrder = sortOrder)
 }

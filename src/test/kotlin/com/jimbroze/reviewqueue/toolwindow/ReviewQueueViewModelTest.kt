@@ -5,6 +5,8 @@ import com.jimbroze.reviewqueue.queue.RepositoryName
 import com.jimbroze.reviewqueue.queue.RequestedReviewer
 import com.jimbroze.reviewqueue.queue.ReviewRequest
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult
+import com.jimbroze.reviewqueue.queue.SortOrder
+import com.jimbroze.reviewqueue.queue.SortRule
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.CouldNotLoad
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.Loading
 import com.jimbroze.reviewqueue.toolwindow.ReviewQueueState.NeedsSignIn
@@ -421,6 +423,36 @@ class ReviewQueueViewModelTest {
         viewModel.usePreferences(preferencesWithTiming(nearlyOverdueAfter = Duration.ofHours(1), overdueAfter = Duration.ofHours(2)))
 
         assertEquals(CouldNotLoad("timed out"), viewModel.state.value)
+    }
+
+    @Test
+    fun `rows follow the preferred sort order`() = runBlocking {
+        val older = request(number = 1, requestedAt = now.minus(Duration.ofHours(2)))
+        val reReview = request(number = 2, requestedAt = now.minus(Duration.ofHours(1)), isReReview = true)
+        val viewModel = viewModelReturning(ReviewRequestsResult.Success(listOf(reReview, older)))
+        viewModel.usePreferences(preferences.copy(sortOrder = SortOrder.of(listOf(SortRule.LongestWaitingFirst))))
+        viewModel.refresh()
+
+        assertEquals(listOf(1L, 2L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
+    }
+
+    @Test
+    fun `a new sort order reorders the rows without fetching again`() = runBlocking {
+        var fetches = 0
+        val draft = request(number = 1, requestedAt = now.minus(Duration.ofHours(2)), isDraft = true)
+        val ready = request(number = 2, requestedAt = now.minus(Duration.ofHours(1)))
+        val viewModel = ReviewQueueViewModel(
+            { fetches++; ReviewRequestsResult.Success(listOf(draft, ready)) },
+            recordingOpener,
+            clock,
+            preferences,
+        )
+        viewModel.refresh()
+
+        viewModel.usePreferences(preferences.copy(sortOrder = SortOrder.of(listOf(SortRule.LongestWaitingFirst))))
+
+        assertEquals(listOf(1L, 2L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
+        assertEquals(1, fetches)
     }
 
     private fun preferencesWithTiming(nearlyOverdueAfter: Duration, overdueAfter: Duration) =

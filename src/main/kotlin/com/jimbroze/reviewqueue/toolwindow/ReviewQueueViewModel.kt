@@ -94,7 +94,7 @@ class ReviewQueueViewModel(
     }
 
     private fun stateFor(queue: Success, isRefreshing: Boolean = false): ReviewQueueState {
-        val shownRequests = ReviewQueue.order(queue.requests)
+        val shownRequests = ReviewQueue.order(queue.requests, preferences.sortOrder)
         return if (shownRequests.isEmpty()) {
             ReviewQueueState.NothingWaiting(queue.warnings)
         } else {

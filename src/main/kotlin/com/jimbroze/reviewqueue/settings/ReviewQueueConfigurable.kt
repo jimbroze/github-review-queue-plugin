@@ -16,9 +16,11 @@ import java.nio.file.Path
 class ReviewQueueConfigurable : BoundConfigurable(ReviewQueueBundle.message("settings.displayName")) {
     private val settings = service<ReviewQueueSettings>()
     private val timingSection = TimingSection(settings)
+    private val sortSection = SortSection(settings)
 
     override fun createPanel(): DialogPanel = panel {
         timingSection.addTo(this)
+        sortSection.addTo(this)
         row {
             textArea()
                 .label(ReviewQueueBundle.message("settings.codeFolders"), LabelPosition.TOP)
