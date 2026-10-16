@@ -6,6 +6,7 @@ import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.jimbroze.reviewqueue.clones.pathOrNull
+import com.jimbroze.reviewqueue.queue.QueueFilter
 import com.jimbroze.reviewqueue.queue.SortOrder
 import com.jimbroze.reviewqueue.toolwindow.QueuePreferences
 import java.nio.file.Path
@@ -22,6 +23,8 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
         var nearlyOverdueHours by property(TimingChoice.Default.nearlyOverdueHours)
         var overdueHours by property(TimingChoice.Default.overdueHours)
         var sortOrder by string()
+        var showDrafts by property(true)
+        var includeTeamRequests by property(true)
     }
 
     /** Folders the user keeps clones in; entries that are not valid paths are left out. */
@@ -47,6 +50,22 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
             state.sortOrder = SortOrderSetting.store(order)
         }
 
+    var showDrafts: Boolean
+        get() = state.showDrafts
+        set(shown) {
+            state.showDrafts = shown
+        }
+
+    var includeTeamRequests: Boolean
+        get() = state.includeTeamRequests
+        set(included) {
+            state.includeTeamRequests = included
+        }
+
     fun queuePreferencesIn(zone: ZoneId): QueuePreferences =
-        QueuePreferences(timing = timing.toReviewTiming(zone), sortOrder = sortOrder)
+        QueuePreferences(
+            timing = timing.toReviewTiming(zone),
+            sortOrder = sortOrder,
+            filter = QueueFilter(showDrafts, includeTeamRequests),
+        )
 }

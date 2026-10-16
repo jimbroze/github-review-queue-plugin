@@ -1,6 +1,7 @@
 package com.jimbroze.reviewqueue.toolwindow
 
 import com.jimbroze.reviewqueue.queue.PullRequestRef
+import com.jimbroze.reviewqueue.queue.QueueFilter
 import com.jimbroze.reviewqueue.queue.RepositoryName
 import com.jimbroze.reviewqueue.queue.RequestedReviewer
 import com.jimbroze.reviewqueue.queue.ReviewRequest
@@ -453,6 +454,63 @@ class ReviewQueueViewModelTest {
 
         assertEquals(listOf(1L, 2L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
         assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `drafts can be hidden`() {
+        val rows = refreshedRowsWith(
+            preferences.copy(filter = QueueFilter(showDrafts = false)),
+            request(number = 1, isDraft = true),
+            request(number = 2),
+        )
+
+        assertEquals(listOf(2L), rows.map { it.pullRequest.number })
+    }
+
+    @Test
+    fun `team requests can be hidden`() {
+        val rows = refreshedRowsWith(
+            preferences.copy(filter = QueueFilter(includeTeamRequests = false)),
+            request(number = 1, reviewer = RequestedReviewer.Team("acme/platform")),
+            request(number = 2, reviewer = RequestedReviewer.You),
+        )
+
+        assertEquals(listOf(2L), rows.map { it.pullRequest.number })
+    }
+
+    @Test
+    fun `when every request is hidden nothing is waiting, keeping the warnings`() = runBlocking {
+        val viewModel = viewModelReturning(
+            ReviewRequestsResult.Success(listOf(request(isDraft = true)), warnings = listOf("Some teams are hidden")),
+        )
+        viewModel.usePreferences(preferences.copy(filter = QueueFilter(showDrafts = false)))
+        viewModel.refresh()
+
+        assertEquals(NothingWaiting(warnings = listOf("Some teams are hidden")), viewModel.state.value)
+    }
+
+    @Test
+    fun `showing hidden requests again brings their rows back without fetching`() = runBlocking {
+        var fetches = 0
+        val viewModel = ReviewQueueViewModel(
+            { fetches++; ReviewRequestsResult.Success(listOf(request(number = 1, isDraft = true))) },
+            recordingOpener,
+            clock,
+            preferences.copy(filter = QueueFilter(showDrafts = false)),
+        )
+        viewModel.refresh()
+
+        viewModel.usePreferences(preferences.copy(filter = QueueFilter(showDrafts = true)))
+
+        assertEquals(listOf(1L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
+        assertEquals(1, fetches)
+    }
+
+    private fun refreshedRowsWith(preferences: QueuePreferences, vararg requests: ReviewRequest): List<ReviewRow> = runBlocking {
+        val viewModel = viewModelReturning(ReviewRequestsResult.Success(requests.toList()))
+        viewModel.usePreferences(preferences)
+        viewModel.refresh()
+        (viewModel.state.value as Showing).rows
     }
 
     private fun preferencesWithTiming(nearlyOverdueAfter: Duration, overdueAfter: Duration) =

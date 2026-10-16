@@ -6,6 +6,7 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.LabelPosition
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.rows
@@ -19,6 +20,14 @@ class ReviewQueueConfigurable : BoundConfigurable(ReviewQueueBundle.message("set
     private val sortSection = SortSection(settings)
 
     override fun createPanel(): DialogPanel = panel {
+        group(ReviewQueueBundle.message("settings.show")) {
+            row {
+                checkBox(ReviewQueueBundle.message("settings.showDrafts")).bindSelected(settings::showDrafts)
+            }
+            row {
+                checkBox(ReviewQueueBundle.message("settings.includeTeamRequests")).bindSelected(settings::includeTeamRequests)
+            }
+        }
         timingSection.addTo(this)
         sortSection.addTo(this)
         row {
