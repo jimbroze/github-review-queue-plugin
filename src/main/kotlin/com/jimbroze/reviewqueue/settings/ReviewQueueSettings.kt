@@ -25,6 +25,8 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
         var sortOrder by string()
         var showDrafts by property(true)
         var includeTeamRequests by property(true)
+        var autoRefreshOn by property(true)
+        var autoRefreshMinutes by property(AutoRefresh.DEFAULT_MINUTES)
     }
 
     /** Folders the user keeps clones in; entries that are not valid paths are left out. */
@@ -61,6 +63,20 @@ class ReviewQueueSettings : SimplePersistentStateComponent<ReviewQueueSettings.S
         set(included) {
             state.includeTeamRequests = included
         }
+
+    var autoRefreshOn: Boolean
+        get() = state.autoRefreshOn
+        set(on) {
+            state.autoRefreshOn = on
+        }
+
+    var autoRefreshMinutes: Int
+        get() = state.autoRefreshMinutes
+        set(minutes) {
+            state.autoRefreshMinutes = minutes
+        }
+
+    val autoRefresh: AutoRefresh get() = AutoRefresh.restore(autoRefreshOn, autoRefreshMinutes)
 
     fun queuePreferencesIn(zone: ZoneId): QueuePreferences =
         QueuePreferences(

@@ -38,6 +38,7 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicInteger
 
 class ReviewQueueViewModelTest {
 
@@ -504,6 +505,40 @@ class ReviewQueueViewModelTest {
 
         assertEquals(listOf(1L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
         assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `the queue fetches again on each tick`() = runBlocking {
+        val fetches = AtomicInteger()
+        val viewModel = ReviewQueueViewModel(
+            { fetches.incrementAndGet(); ReviewRequestsResult.Success(emptyList()) },
+            recordingOpener,
+            clock,
+            preferences,
+        )
+        val ticks = MutableSharedFlow<Unit>()
+        val refreshing = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepRefreshing(ticks) }
+
+        repeat(3) { ticks.tick() }
+        refreshing.cancel()
+
+        assertEquals(3, fetches.get())
+    }
+
+    @Test
+    fun `a tick is skipped while a fetch is still running`() = runBlocking {
+        val fetches = AtomicInteger()
+        val neverAnswers = CompletableDeferred<ReviewRequestsResult>()
+        val viewModel = ReviewQueueViewModel({ fetches.incrementAndGet(); neverAnswers.await() }, recordingOpener, clock, preferences)
+        val slowFetch = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.refresh() }
+        val ticks = MutableSharedFlow<Unit>()
+        val refreshing = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepRefreshing(ticks) }
+
+        repeat(2) { ticks.tick() }
+        refreshing.cancel()
+        slowFetch.cancel()
+
+        assertEquals(1, fetches.get())
     }
 
     private fun refreshedRowsWith(preferences: QueuePreferences, vararg requests: ReviewRequest): List<ReviewRow> = runBlocking {

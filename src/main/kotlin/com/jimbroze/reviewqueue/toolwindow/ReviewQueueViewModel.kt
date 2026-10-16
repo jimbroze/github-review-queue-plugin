@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 class ReviewQueueViewModel(
     private val source: ReviewRequestsSource,
@@ -29,18 +30,29 @@ class ReviewQueueViewModel(
 ) {
     private val mutableState = MutableStateFlow<ReviewQueueState>(ReviewQueueState.Loading)
     private val stateLock = Any()
+    private val runningFetches = AtomicInteger()
     private var loadedQueue: Success? = null
 
     val state: StateFlow<ReviewQueueState> = mutableState.asStateFlow()
 
     suspend fun refresh() {
-        synchronized(stateLock) { mutableState.update(::fetchingState) }
-        show(fetchOrFailure())
+        runningFetches.incrementAndGet()
+        try {
+            synchronized(stateLock) { mutableState.update(::fetchingState) }
+            show(fetchOrFailure())
+        } finally {
+            runningFetches.decrementAndGet()
+        }
     }
 
     /** Recalculates the shown waiting times on each of [ticks], without fetching. */
     suspend fun keepWaitingTimesCurrent(ticks: Flow<Unit>) {
         ticks.collect { showCurrentWaitingTimes() }
+    }
+
+    /** Fetches again on each of [ticks], skipping a tick while a fetch is still running. */
+    suspend fun keepRefreshing(ticks: Flow<Unit>) {
+        ticks.collect { if (runningFetches.get() == 0) refresh() }
     }
 
     /** Shows the loaded queue with [newPreferences], without fetching. */
