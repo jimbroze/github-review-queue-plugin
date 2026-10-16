@@ -78,7 +78,7 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
     private fun showDetails(row: ReviewRow, foreground: Color, waitingTimeColour: Color?) {
         detailsLine.clear()
         detailsLine.foreground = foreground
-        detailsLine.append(ReviewQueueBundle.message("row.waiting", row.waitingFor), waitingTimeStyle(waitingTimeColour))
+        detailsLine.append(row.waitingFor, waitingTimeStyle(waitingTimeColour))
         appendDetail(ReviewQueueBundle.message("row.details", row.pullRequestLabel, row.authorLogin, row.requestedFrom))
         if (row.isDraft) appendDetail(ReviewQueueBundle.message("row.draft"))
     }
