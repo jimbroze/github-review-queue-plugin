@@ -45,8 +45,6 @@ class ReviewQueueViewModelTest {
     private val now = Instant.parse("2026-10-15T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val preferences = QueuePreferences(timing = ReviewTiming.defaultsIn(ZoneOffset.UTC))
-    private val openedPullRequests = mutableListOf<Pair<PullRequestRef, String>>()
-    private val recordingOpener = PullRequestOpener { pullRequest, url -> openedPullRequests += pullRequest to url }
 
     @Test
     fun `before the first refresh the queue is loading`() {
@@ -58,7 +56,7 @@ class ReviewQueueViewModelTest {
     @Test
     fun `the first load shows loading`() = runBlocking {
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
-        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ stillFetching.await() }, clock, preferences)
 
         assertEquals(Loading, stateWhileFetching(viewModel, stillFetching))
     }
@@ -68,7 +66,7 @@ class ReviewQueueViewModelTest {
         val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
         val responses = ArrayDeque(listOf(loaded, stillFetching))
-        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, clock, preferences)
         viewModel.refresh()
 
         val state = stateWhileFetching(viewModel, stillFetching) as Showing
@@ -196,16 +194,6 @@ class ReviewQueueViewModelTest {
         assertEquals(listOf(2L), (viewModel.state.value as Showing).rows.map { it.pullRequest.number })
     }
 
-    @Test
-    fun `opening a row opens that pull request`() = runBlocking {
-        val viewModel = viewModelReturning(ReviewRequestsResult.Success(listOf(request(number = 7))))
-        viewModel.refresh()
-
-        viewModel.open((viewModel.state.value as Showing).rows.single())
-
-        val expected = PullRequestRef(RepositoryName("acme", "widgets"), 7) to "https://github.com/acme/widgets/pull/7"
-        assertEquals(listOf(expected), openedPullRequests)
-    }
 
     @Test
     fun `a missing GitHub account asks you to sign in`() {
@@ -250,7 +238,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a fetch that throws unexpectedly shows that the queue could not load`() = runBlocking {
-        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ throw IllegalStateException("connection reset") }, clock, preferences)
         viewModel.refresh()
 
         assertEquals(CouldNotLoad("connection reset"), viewModel.state.value)
@@ -258,7 +246,7 @@ class ReviewQueueViewModelTest {
 
     @Test
     fun `a cancelled fetch is not shown as a failure`() {
-        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ throw CancellationException("tool window closed") }, clock, preferences)
 
         assertThrows(CancellationException::class.java) { runBlocking { viewModel.refresh() } }
         assertFalse(viewModel.state.value is CouldNotLoad)
@@ -298,7 +286,6 @@ class ReviewQueueViewModelTest {
         var fetches = 0
         val viewModel = ReviewQueueViewModel(
             { fetches++; ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1))))) },
-            recordingOpener,
             movableClock,
             preferences,
         )
@@ -321,7 +308,6 @@ class ReviewQueueViewModelTest {
         val movableClock = MovableClock(now)
         val viewModel = ReviewQueueViewModel(
             { ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(1)))), warnings = listOf("Some teams are hidden")) },
-            recordingOpener,
             movableClock,
             preferences,
         )
@@ -361,7 +347,6 @@ class ReviewQueueViewModelTest {
         var fetches = 0
         val viewModel = ReviewQueueViewModel(
             { fetches++; ReviewRequestsResult.Success(listOf(request(requestedAt = now.minus(Duration.ofHours(2))))) },
-            recordingOpener,
             clock,
             preferences,
         )
@@ -392,7 +377,7 @@ class ReviewQueueViewModelTest {
         val loaded = CompletableDeferred<ReviewRequestsResult>(ReviewRequestsResult.Success(listOf(request(number = 1))))
         val stillFetching = CompletableDeferred<ReviewRequestsResult>()
         val responses = ArrayDeque(listOf(loaded, stillFetching))
-        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ responses.removeFirst().await() }, clock, preferences)
         viewModel.refresh()
 
         val state = coroutineScope {
@@ -445,7 +430,6 @@ class ReviewQueueViewModelTest {
         val ready = request(number = 2, requestedAt = now.minus(Duration.ofHours(1)))
         val viewModel = ReviewQueueViewModel(
             { fetches++; ReviewRequestsResult.Success(listOf(draft, ready)) },
-            recordingOpener,
             clock,
             preferences,
         )
@@ -495,7 +479,6 @@ class ReviewQueueViewModelTest {
         var fetches = 0
         val viewModel = ReviewQueueViewModel(
             { fetches++; ReviewRequestsResult.Success(listOf(request(number = 1, isDraft = true))) },
-            recordingOpener,
             clock,
             preferences.copy(filter = QueueFilter(showDrafts = false)),
         )
@@ -512,7 +495,6 @@ class ReviewQueueViewModelTest {
         val fetches = AtomicInteger()
         val viewModel = ReviewQueueViewModel(
             { fetches.incrementAndGet(); ReviewRequestsResult.Success(emptyList()) },
-            recordingOpener,
             clock,
             preferences,
         )
@@ -529,7 +511,7 @@ class ReviewQueueViewModelTest {
     fun `a tick is skipped while a fetch is still running`() = runBlocking {
         val fetches = AtomicInteger()
         val neverAnswers = CompletableDeferred<ReviewRequestsResult>()
-        val viewModel = ReviewQueueViewModel({ fetches.incrementAndGet(); neverAnswers.await() }, recordingOpener, clock, preferences)
+        val viewModel = ReviewQueueViewModel({ fetches.incrementAndGet(); neverAnswers.await() }, clock, preferences)
         val slowFetch = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.refresh() }
         val ticks = MutableSharedFlow<Unit>()
         val refreshing = launch(start = CoroutineStart.UNDISPATCHED) { viewModel.keepRefreshing(ticks) }
@@ -594,7 +576,7 @@ class ReviewQueueViewModelTest {
 
     private fun viewModelReturning(vararg results: ReviewRequestsResult): ReviewQueueViewModel {
         val remaining = ArrayDeque(results.toList())
-        return ReviewQueueViewModel({ remaining.removeFirst() }, recordingOpener, clock, preferences)
+        return ReviewQueueViewModel({ remaining.removeFirst() }, clock, preferences)
     }
 
     private fun stateAfterRefresh(result: ReviewRequestsResult): ReviewQueueState = runBlocking {

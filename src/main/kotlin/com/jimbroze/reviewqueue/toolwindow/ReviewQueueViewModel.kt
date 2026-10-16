@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ReviewQueueViewModel(
     private val source: ReviewRequestsSource,
-    private val opener: PullRequestOpener,
     private val clock: Clock,
     private var preferences: QueuePreferences,
 ) {
@@ -59,10 +58,6 @@ class ReviewQueueViewModel(
     fun usePreferences(newPreferences: QueuePreferences) = synchronized(stateLock) {
         preferences = newPreferences
         showLoadedQueueAgain()
-    }
-
-    fun open(row: ReviewRow) {
-        opener.open(row.pullRequest, row.url)
     }
 
     private fun fetchingState(current: ReviewQueueState): ReviewQueueState =

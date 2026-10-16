@@ -22,7 +22,7 @@ class ReviewQueueToolWindowFactory : ToolWindowFactory, DumbAware {
         )
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, null, false))
         reviewQueue.renderStateOnEdt(until = toolWindow.disposable, render = panel::render)
-        reviewQueue.refresh()
+        reviewQueue.watchWhileVisible(toolWindow)
     }
 
     private fun openGitHubSettings(project: Project) {
