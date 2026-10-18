@@ -1,0 +1,13 @@
+package com.jimbroze.reviewqueue.toolwindow
+
+import com.intellij.DynamicBundle
+import org.jetbrains.annotations.Nls
+import org.jetbrains.annotations.PropertyKey
+
+private const val BUNDLE = "messages.ReviewQueueBundle"
+
+object ReviewQueueBundle : DynamicBundle(ReviewQueueBundle::class.java, BUNDLE) {
+    @Nls
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String =
+        getMessage(key, *params)
+}
