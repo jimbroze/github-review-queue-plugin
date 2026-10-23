@@ -32,8 +32,6 @@ jobs:
       - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          include_comments_by_actor: jimbroze
-          branch_prefix: claude/
           claude_args: |
             --permission-mode acceptEdits
             --allowedTools "Read,Glob,Grep,LS,Bash(./gradlew test:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git switch -c claude/issue-${{ github.event.issue.number }}),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin claude/issue-${{ github.event.issue.number }}),Bash(gh issue view ${{ github.event.issue.number }}),Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(gh pr create:*)"
