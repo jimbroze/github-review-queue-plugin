@@ -73,7 +73,7 @@ jobs:
           claude_args: |
             --permission-mode acceptEdits
             --allowedTools "Read,Glob,Grep,LS,Bash(./gradlew test:*),Bash(./gradlew verifyPlugin),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr view ${{ github.event.issue.number }}),Bash(gh pr diff ${{ github.event.issue.number }}),Bash(gh issue view ${{ steps.gate.outputs.issue }})"
-            --disallowedTools "Edit(src/test/**),Edit(src/integrationTest/**),Edit(.github/**)"
+            --disallowedTools "Edit(src/test/**),Edit(src/integrationTest/**),Edit(.github/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
           prompt: |
             You are working on PR #${{ github.event.issue.number }} in ${{ github.repository }}, branch `${{ steps.gate.outputs.branch }}`.
             This is stage 2 of a test-first flow. Stage 1 wrote failing tests, and the owner approved them.
@@ -83,6 +83,9 @@ jobs:
                the linked issue with `gh issue view ${{ steps.gate.outputs.issue }}`, then CLAUDE.md and the relevant code.
             2. Make the PR's failing tests pass. Do not change any file under `src/test/` or `src/integrationTest/`.
                Replace any `TODO()` stubs from stage 1 with real code.
+               Do not change build files (`build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradle/`,
+               `gradlew`, `gradlew.bat`). If the change needs a new dependency or build change, commit nothing and
+               say so in your final output so the owner can add it by hand.
                Follow CLAUDE.md: keep to the package architecture, keep GitHub-plugin internals only in
                `ide/GitHubPluginPullRequestViewer.kt`, keep time deterministic (pass a `Clock`, never real delays),
                and write self-documenting code: names do the explaining, comments are a last resort.
@@ -93,16 +96,16 @@ jobs:
             If the tests can't be made to pass without editing them, or the tests look wrong, don't work around it:
             commit nothing and explain why in your final output.
 
-      - name: Refuse changes to tests or workflows
+      - name: Refuse changes to tests, build or workflows
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE_SHA: ${{ steps.before.outputs.sha }}
         run: |
-          protected_changes=$(git diff --name-only "$BEFORE_SHA" HEAD -- src/test src/integrationTest .github)
+          protected_changes=$(git diff --name-only "$BEFORE_SHA" HEAD -- src/test src/integrationTest .github build.gradle.kts settings.gradle.kts gradle.properties gradle gradlew gradlew.bat)
           if git merge-base --is-ancestor "$BEFORE_SHA" HEAD && [ -z "$protected_changes" ]; then
             exit 0
           fi
-          gh pr comment "$PR_NUMBER" --body "Stage 2 rewrote existing commits or changed approved tests or workflows, so nothing was pushed. Changed protected files:
+          gh pr comment "$PR_NUMBER" --body "Stage 2 rewrote existing commits or changed approved tests, build files or workflows, so nothing was pushed. Changed protected files:
 
           \`\`\`
           ${protected_changes:-none (existing commits were rewritten)}
