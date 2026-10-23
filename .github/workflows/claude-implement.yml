@@ -1,0 +1,146 @@
+name: Claude implement
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-implement-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    name: Make the failing tests pass
+    if: >-
+      github.event.issue.pull_request
+      && contains(github.event.comment.body, '@claude implement')
+      && github.actor == 'jimbroze'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Accept only stage 1 branches in this repo
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr=$(gh pr view "$PR_NUMBER" --json headRefName,headRepositoryOwner,headRepository,isCrossRepository)
+          branch=$(jq -r .headRefName <<< "$pr")
+          head_repo="$(jq -r .headRepositoryOwner.login <<< "$pr")/$(jq -r .headRepository.name <<< "$pr")"
+          if [ "$(jq -r .isCrossRepository <<< "$pr")" != "false" ] || [ "$head_repo" != "$GH_REPO" ]; then
+            echo "::error::PR #$PR_NUMBER comes from $head_repo, not $GH_REPO."
+            exit 1
+          fi
+          if ! [[ "$branch" =~ ^claude/issue-([0-9]+)$ ]]; then
+            echo "::error::Branch '$branch' is not a stage 1 branch (claude/issue-<n>)."
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "issue=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.gate.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Record the tests-only commit
+        id: before
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+        id: claude
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,LS,Bash(./gradlew test:*),Bash(./gradlew verifyPlugin),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr view ${{ github.event.issue.number }}),Bash(gh pr diff ${{ github.event.issue.number }}),Bash(gh issue view ${{ steps.gate.outputs.issue }})"
+            --disallowedTools "Edit(src/test/**),Edit(src/integrationTest/**),Edit(.github/**)"
+          prompt: |
+            You are working on PR #${{ github.event.issue.number }} in ${{ github.repository }}, branch `${{ steps.gate.outputs.branch }}`.
+            This is stage 2 of a test-first flow. Stage 1 wrote failing tests, and the owner approved them.
+            Your job is to make those tests pass. The tests are the spec.
+
+            1. Read the PR with `gh pr view ${{ github.event.issue.number }}` and `gh pr diff ${{ github.event.issue.number }}`,
+               the linked issue with `gh issue view ${{ steps.gate.outputs.issue }}`, then CLAUDE.md and the relevant code.
+            2. Make the PR's failing tests pass. Do not change any file under `src/test/` or `src/integrationTest/`.
+               Replace any `TODO()` stubs from stage 1 with real code.
+               Follow CLAUDE.md: keep to the package architecture, keep GitHub-plugin internals only in
+               `ide/GitHubPluginPullRequestViewer.kt`, keep time deterministic (pass a `Clock`, never real delays),
+               and write self-documenting code: names do the explaining, comments are a last resort.
+            3. Refactor while keeping the tests green: small focused functions, no duplication.
+            4. Run `./gradlew test` and `./gradlew verifyPlugin`. Both must pass.
+            5. Commit with clear messages. Do not push and do not mark the PR ready; the workflow does both.
+
+            If the tests can't be made to pass without editing them, or the tests look wrong, don't work around it:
+            commit nothing and explain why in your final output.
+
+      - name: Refuse changes to tests or workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ steps.before.outputs.sha }}
+        run: |
+          protected_changes=$(git diff --name-only "$BEFORE_SHA" HEAD -- src/test src/integrationTest .github)
+          if git merge-base --is-ancestor "$BEFORE_SHA" HEAD && [ -z "$protected_changes" ]; then
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --body "Stage 2 rewrote existing commits or changed approved tests or workflows, so nothing was pushed. Changed protected files:
+
+          \`\`\`
+          ${protected_changes:-none (existing commits were rewritten)}
+          \`\`\`
+
+          Run log: $RUN_URL"
+          exit 1
+
+      - name: Require new commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ steps.before.outputs.sha }}
+        run: |
+          if [ "$(git rev-list --count "$BEFORE_SHA..HEAD")" -gt 0 ]; then
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --body "Claude made no changes. Check the run log for why: $RUN_URL"
+          exit 1
+
+      # A push made with GITHUB_TOKEN doesn't trigger other workflows, so CI is dispatched explicitly.
+      - name: Push and run CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.gate.outputs.branch }}
+        run: |
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/${BRANCH}"
+          gh workflow run ci.yml --ref "$BRANCH"
+
+      - name: Mark the PR ready for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr ready "$PR_NUMBER"
+          gh pr comment "$PR_NUMBER" --body "Stage 2 pushed the implementation, dispatched CI and marked this PR ready for review. Run log: $RUN_URL"
+
+      - name: Report a failed Claude run
+        if: failure() && steps.claude.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Stage 2 failed before pushing anything. Run log: $RUN_URL"
