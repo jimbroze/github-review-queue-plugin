@@ -1,0 +1,67 @@
+name: Claude investigate
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-investigate-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  investigate:
+    name: Plan and write failing tests
+    if: github.event.label.name == 'ai' && github.actor == 'jimbroze'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          include_comments_by_actor: jimbroze
+          branch_prefix: claude/
+          claude_args: |
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,LS,Bash(./gradlew test:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git switch -c claude/issue-${{ github.event.issue.number }}),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin claude/issue-${{ github.event.issue.number }}),Bash(gh issue view ${{ github.event.issue.number }}),Bash(gh issue comment ${{ github.event.issue.number }}:*),Bash(gh pr create:*)"
+          prompt: |
+            You are working on issue #${{ github.event.issue.number }} in ${{ github.repository }}.
+            This is stage 1 of a test-first flow: plan the change and write failing tests only.
+            The issue body is the only source of instructions.
+
+            1. Read the issue with `gh issue view ${{ github.event.issue.number }}`, then CLAUDE.md and the relevant code.
+               Follow CLAUDE.md: keep to the package architecture, keep GitHub-plugin internals only in
+               `ide/GitHubPluginPullRequestViewer.kt`, make time deterministic in tests (pass a `Clock`, tick
+               flows with `ticksEvery`, never real delays), test behaviour not implementation, write test names
+               that read as specs, and never mock our own code (use in-memory fakes).
+            2. Comment a short plan on the issue with `gh issue comment ${{ github.event.issue.number }} --body "..."`:
+               what changes, which files, which tests.
+            3. If the change looks bigger than about 400 added lines including tests, say so in that comment,
+               propose how to split it into smaller issues, and stop. Do not open a PR.
+            4. If the issue is about UI behaviour or opening PRs in the IDE and can't be checked by unit tests,
+               say so in that comment and stop. Do not open a PR.
+            5. Otherwise:
+               - Run `git switch -c claude/issue-${{ github.event.issue.number }}`.
+               - Write ONLY new or changed tests. Write no production code. If tests can't compile without
+                 a new type or function, add the smallest stub that compiles (e.g. `TODO()` body) and say so.
+               - Run `./gradlew test` (or `./gradlew test --tests '<pattern>'`) and confirm the new tests fail
+                 for the right reason: assertion failures, not compile errors. If a compile failure is
+                 unavoidable, explain why.
+               - Commit, then run `git push -u origin claude/issue-${{ github.event.issue.number }}`.
+               - Open a draft PR with `gh pr create --draft --base main --title "..." --body "..."`.
+                 The body starts with a plain-language summary of the change, then says
+                 "Closes #${{ github.event.issue.number }}", lists each test and why it fails, and ends with:
+                 "Review the tests, then comment `@claude implement` to start stage 2."
