@@ -32,6 +32,11 @@ class GitRemoteTest {
     }
 
     @Test
+    fun `an scp-style ssh remote with a slash before the owner is parsed`() {
+        assertEquals(rockets, GitRemote.parse("git@github.com:/acme/rockets.git"))
+    }
+
+    @Test
     fun `an ssh url remote is parsed, with or without a port`() {
         assertEquals(rockets, GitRemote.parse("ssh://git@github.com/acme/rockets.git"))
         assertEquals(rockets, GitRemote.parse("ssh://git@github.com:22/acme/rockets"))
