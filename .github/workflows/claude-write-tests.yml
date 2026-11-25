@@ -114,7 +114,7 @@ jobs:
                `git push -u origin claude/issue-${{ github.event.issue.number }}`
             7. Write the PR body to `${{ runner.temp }}/claude-task/pr-body.md`. It starts with a plain-language summary of
                the change, then says "Closes #${{ github.event.issue.number }}", lists each test and why it fails, and ends with:
-               Review the tests, then comment `@claude implement` to make them pass.
+               Review the tests, then comment `@claude revise: <feedback>` to change them, or `@claude implement` to make them pass.
                Then run, with a one-line title without backticks or `$`:
                `gh pr create --draft --base main --head claude/issue-${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/pr-body.md --title "<title>"`
 

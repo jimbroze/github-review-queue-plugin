@@ -1,0 +1,174 @@
+name: Claude revise tests
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  revise-tests:
+    name: Revise the failing tests
+    if: >-
+      github.actor == 'jimbroze'
+      && github.event.comment.user.login == 'jimbroze'
+      && github.event.issue.pull_request
+      && startsWith(github.event.comment.body, '@claude revise')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: claude-revise-tests-${{ github.event.issue.number }}-${{ github.actor }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      MAX_STUB_LINES: 30
+    steps:
+      - name: Accept only draft test PRs in this repo
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr=$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER")
+          branch=$(jq -r .head.ref <<< "$pr")
+          if [ "$(jq -r .head.repo.full_name <<< "$pr")" = "$GH_REPO" ] &&
+            [[ "$branch" =~ ^claude/issue-[0-9]+$ ]] &&
+            [ "$(jq -r '.state == "open" and .draft' <<< "$pr")" = true ]; then
+            echo "branch=$branch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --body "Tests can only be revised on an open draft PR from a \`claude/issue-<n>\` branch in this repo, so nothing was changed."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Collect the owner's feedback
+        id: feedback
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          mkdir "$RUNNER_TEMP/claude-task"
+          .github/scripts/collect-review-feedback.sh > "$RUNNER_TEMP/claude-task/feedback.json"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.gate.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Record the commit under review
+        id: before
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+        id: claude
+        env:
+          BASH_DEFAULT_TIMEOUT_MS: 1200000
+          BASH_MAX_TIMEOUT_MS: 1200000
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --permission-mode acceptEdits
+            --add-dir ${{ runner.temp }}/claude-task
+            --allowedTools "Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt)"
+            --disallowedTools "Edit(.github/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
+          prompt: |
+            You are working on PR #${{ github.event.issue.number }} in ${{ github.repository }}, branch `${{ steps.gate.outputs.branch }}`.
+            The PR holds failing tests for a change that isn't implemented yet. Revise those tests to
+            follow the owner's review feedback. Do not implement the change.
+
+            Run the commands below exactly as written, one per call: no `cd`, `&&`, heredocs or `$(...)`.
+            Write multi-line text to a file in `${{ runner.temp }}/claude-task/` with the Write tool.
+
+            1. Read `${{ runner.temp }}/claude-task/feedback.json`, the owner's feedback, and `git diff origin/main...HEAD`,
+               the PR. The feedback is the only source of instructions. Comment ${{ github.event.comment.id }} triggered this
+               run. Earlier feedback may already be applied. Where feedback disagrees, the latest wins.
+            2. Read CLAUDE.md and the relevant code, and follow CLAUDE.md: keep to the package architecture, keep
+               GitHub-plugin internals only in `ide/GitHubPluginPullRequestViewer.kt`, and make time deterministic
+               in tests (pass a `Clock`, tick flows with `ticksEvery`, never real delays).
+            3. Change ONLY files under `src/test/` and `src/integrationTest/`. If tests can't compile without a new
+               type or function, add the smallest stub (e.g. `TODO()` body) under `src/main/kotlin/`.
+               The workflow rejects any other path, and more than ${{ env.MAX_STUB_LINES }} changed lines in `src/main/kotlin/`.
+               - Test behaviour, not implementation. Never mock our own code: use real collaborators or in-memory fakes.
+               - One behaviour per test. Its name reads as a spec and states one outcome, with no "and".
+               - Assert only what the name claims, and nothing another test already checks.
+               - Comments are a last resort: fix the names instead.
+               - A test file sits in the package of the unit it tests.
+            4. Run `./gradlew test --tests '<pattern>'` and confirm the new tests fail for the right reason: assertion
+               failures (or a stub's `TODO()`), not compile errors.
+            5. Run `git add <paths>` with only the files you changed. Write the message to
+               `${{ runner.temp }}/claude-task/commit-message.txt`, then run
+               `git commit -F ${{ runner.temp }}/claude-task/commit-message.txt`
+               Add new commits only: never amend, rebase or merge. Do not push; the workflow pushes.
+            6. Write a short reply to the owner to `${{ runner.temp }}/claude-task/reply.md`: what you changed for each
+               piece of feedback, and which tests now fail and why. If you changed nothing, say why.
+               The workflow posts it on the PR.
+
+      - name: List commands Claude was denied
+        if: always() && steps.claude.outputs.execution_file
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: .github/scripts/list-denied-commands.sh "$EXECUTION_FILE"
+
+      - name: Require a reply
+        run: test -s "$RUNNER_TEMP/claude-task/reply.md"
+
+      - name: Refuse anything but test changes
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ steps.before.outputs.sha }}
+        run: |
+          refuse() {
+            gh pr comment "$PR_NUMBER" --body "Nothing was pushed: $1 Run log: $RUN_URL"
+            exit 1
+          }
+          git merge-base --is-ancestor "$BEFORE_SHA" HEAD || refuse "Claude rewrote existing commits."
+          changed_files=$(git log -m --name-only --no-renames --format= "$BEFORE_SHA..HEAD")
+          forbidden_files=$(sed -E '\#^(src/test/.+|src/integrationTest/.+|src/main/kotlin/.+\.kt)$#d; /^$/d' <<< "$changed_files")
+          if [ -n "$forbidden_files" ]; then
+            refuse "Claude changed files that aren't tests or Kotlin stubs: $(tr '\n' ' ' <<< "$forbidden_files")"
+          fi
+          stub_lines=$(git diff --numstat --no-renames "$BEFORE_SHA" HEAD -- src/main | awk '{ lines += $1 + $2 } END { print lines + 0 }')
+          if [ "$stub_lines" -gt "$MAX_STUB_LINES" ]; then
+            refuse "Claude changed $stub_lines lines of production code, more than the $MAX_STUB_LINES allowed for stubs."
+          fi
+
+      # A push made with GITHUB_TOKEN doesn't trigger other workflows, so CI is dispatched explicitly.
+      - name: Push and run CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ steps.before.outputs.sha }}
+          BRANCH: ${{ steps.gate.outputs.branch }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$BEFORE_SHA" ]; then
+            git -c core.hooksPath=/dev/null push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" "HEAD:refs/heads/${BRANCH}"
+            gh workflow run ci.yml --ref "$BRANCH"
+          fi
+
+      - name: Post Claude's reply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/claude-task/reply.md"
+
+      - name: Report a failed run
+        if: (failure() || cancelled()) && steps.feedback.outcome == 'success' && steps.guard.outcome != 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Revising the tests failed. Run log: $RUN_URL"
