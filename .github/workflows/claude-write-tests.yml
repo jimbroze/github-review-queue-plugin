@@ -4,11 +4,7 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 jobs:
   write-tests:
@@ -21,6 +17,11 @@ jobs:
       && contains(github.event.issue.labels.*.name, 'ai')
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      id-token: write
     concurrency:
       group: claude-issue-${{ github.event.issue.number }}-${{ github.actor }}
       cancel-in-progress: false
@@ -33,7 +34,7 @@ jobs:
       BRANCH: claude/issue-${{ github.event.issue.number }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -56,19 +57,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
         run: |
+          cp -R .github/scripts "$RUNNER_TEMP/trusted-scripts"
           mkdir "$RUNNER_TEMP/claude-task"
-          .github/scripts/collect-issue-conversation.sh > "$RUNNER_TEMP/claude-task/conversation.json"
+          "$RUNNER_TEMP/trusted-scripts"/collect-issue-conversation.sh > "$RUNNER_TEMP/claude-task/conversation.json"
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: true
 
       - name: Create the branch
         run: git switch -c "$BRANCH"
 
-      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1.0.259
         id: claude
         env:
           BASH_DEFAULT_TIMEOUT_MS: 1200000
@@ -77,9 +81,10 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --permission-mode acceptEdits
+            --max-turns 150
             --add-dir ${{ runner.temp }}/claude-task
             --allowedTools "Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt),Bash(git push -u origin claude/issue-${{ github.event.issue.number }}),Bash(gh pr create --draft --base main --head claude/issue-${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/pr-body.md --title *),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/stop-reason.md)"
-            --disallowedTools "Edit(.github/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
+            --disallowedTools "Edit(.github/**),Edit(CLAUDE.md),Edit(.claude/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
           prompt: |
             You are working on issue #${{ github.event.issue.number }} in ${{ github.repository }}.
             This is the test-writing stage of a test-first flow: write failing tests only.
@@ -122,7 +127,7 @@ jobs:
         if: always() && steps.claude.outputs.execution_file
         env:
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: .github/scripts/list-denied-commands.sh "$EXECUTION_FILE"
+        run: '"$RUNNER_TEMP/trusted-scripts/list-denied-commands.sh" "$EXECUTION_FILE"'
 
       - name: Require a draft PR
         env:

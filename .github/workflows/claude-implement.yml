@@ -50,7 +50,7 @@ jobs:
           gh pr comment "$PR_NUMBER" --body "Claude only implements open draft PRs that it opened from a \`claude/issue-<n>\` branch in this repo, so nothing was changed."
           exit 1
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Keep the scripts from the default branch
@@ -72,16 +72,16 @@ jobs:
           "$RUNNER_TEMP/trusted-scripts/collect-review-feedback.sh" > "$RUNNER_TEMP/claude-task/feedback.json"
           gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '{title, body}' > "$RUNNER_TEMP/claude-task/pr.json"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.gate.outputs.branch }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
 
@@ -89,7 +89,7 @@ jobs:
         id: before
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1.0.259
         id: claude
         env:
           BASH_DEFAULT_TIMEOUT_MS: 1200000
