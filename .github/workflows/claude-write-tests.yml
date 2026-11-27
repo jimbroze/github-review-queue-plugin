@@ -83,13 +83,15 @@ jobs:
             --permission-mode acceptEdits
             --max-turns 150
             --add-dir ${{ runner.temp }}/claude-task
-            --allowedTools "Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt),Bash(git push -u origin claude/issue-${{ github.event.issue.number }}),Bash(gh pr create --draft --base main --head claude/issue-${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/pr-body.md --title *),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/stop-reason.md)"
+            --allowedTools "Read,Glob,Grep,Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt),Bash(git push -u origin claude/issue-${{ github.event.issue.number }}),Bash(gh pr create --draft --base main --head claude/issue-${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/pr-body.md --title *),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/stop-reason.md)"
             --disallowedTools "Edit(.github/**),Edit(CLAUDE.md),Edit(.claude/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
           prompt: |
             You are working on issue #${{ github.event.issue.number }} in ${{ github.repository }}.
             This is the test-writing stage of a test-first flow: write failing tests only.
             You are already on the branch `claude/issue-${{ github.event.issue.number }}`.
 
+            Explore and read code only with the Read, Glob and Grep tools. Use Bash only for the exact commands this task lists (one command per call, no `cd`, `;`, `&&` or pipes).
+            If a tool call is denied, switch to an allowed tool. Never finish without opening the draft PR (step 7) or posting your stop reason (step 3).
             Run the commands below exactly as written, one per call: no `cd`, `&&`, heredocs or `$(...)`.
             Write multi-line text to a file in `${{ runner.temp }}/claude-task/` with the Write tool.
 

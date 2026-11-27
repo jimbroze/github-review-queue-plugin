@@ -94,13 +94,15 @@ jobs:
             --permission-mode acceptEdits
             --max-turns 150
             --add-dir ${{ runner.temp }}/claude-task
-            --allowedTools "Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt)"
+            --allowedTools "Read,Glob,Grep,Bash(./gradlew test *),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt)"
             --disallowedTools "Edit(.github/**),Edit(CLAUDE.md),Edit(.claude/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
           prompt: |
             You are working on PR #${{ github.event.issue.number }} in ${{ github.repository }}, branch `${{ steps.gate.outputs.branch }}`.
             The PR holds failing tests for a change that isn't implemented yet. Revise those tests to
             follow the owner's review feedback. Do not implement the change.
 
+            Explore and read code only with the Read, Glob and Grep tools. Use Bash only for the exact commands this task lists (one command per call, no `cd`, `;`, `&&` or pipes).
+            If a tool call is denied, switch to an allowed tool. Never finish without committing the revised tests (step 5).
             Run the commands below exactly as written, one per call: no `cd`, `&&`, heredocs or `$(...)`.
             Write multi-line text to a file in `${{ runner.temp }}/claude-task/` with the Write tool.
 
