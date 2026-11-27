@@ -28,6 +28,8 @@ fun pendingReviewFor(viewer: Viewer, timeline: List<TimelineEvent>): PendingRevi
     )
 }
 
+fun hasReviewedWithoutOutstandingRequest(viewer: Viewer, timeline: List<TimelineEvent>): Boolean = TODO()
+
 private data class OutstandingRequest(val reviewer: RequestedReviewer, val since: Instant)
 
 private fun outstandingRequests(viewer: Viewer, chronologicalEvents: List<TimelineEvent>): Collection<OutstandingRequest> {
