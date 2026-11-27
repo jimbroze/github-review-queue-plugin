@@ -1,5 +1,6 @@
 package com.jimbroze.reviewqueue.toolwindow
 
+import com.jimbroze.reviewqueue.queue.PullRequestLabel
 import com.jimbroze.reviewqueue.queue.PullRequestRef
 import com.jimbroze.reviewqueue.queue.QueueFilter
 import com.jimbroze.reviewqueue.queue.RepositoryName
@@ -98,6 +99,15 @@ class ReviewQueueViewModelTest {
         val row = refreshedRows(request(owner = "acme", repository = "widgets", number = 42)).single()
 
         assertEquals("acme/widgets #42", row.pullRequestLabel)
+    }
+
+    @Test
+    fun `a row shows its pull request's labels with their colours`() {
+        val labels = listOf(PullRequestLabel("bug", "d73a4a"), PullRequestLabel("docs", "0075ca"))
+
+        val row = refreshedRows(request(labels = labels)).single()
+
+        assertEquals(labels, row.labels)
     }
 
     @Test
@@ -598,6 +608,7 @@ class ReviewQueueViewModelTest {
         isReReview: Boolean = false,
         authorLogin: String = "alice",
         isDraft: Boolean = false,
+        labels: List<PullRequestLabel> = emptyList(),
     ) = ReviewRequest(
         pullRequest = PullRequestRef(RepositoryName(owner, repository), number),
         title = title,
@@ -607,5 +618,6 @@ class ReviewQueueViewModelTest {
         requestedReviewer = reviewer,
         isReReview = isReReview,
         isDraft = isDraft,
+        labels = labels,
     )
 }

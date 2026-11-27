@@ -53,6 +53,7 @@ fun pullRequest(
     author: String? = "hubot",
     isDraft: Boolean = false,
     createdAt: String = "2026-01-01T09:00:00Z",
+    labels: List<Pair<String, String>> = emptyList(),
     timeline: List<String>,
 ) = """
     {
@@ -62,6 +63,7 @@ fun pullRequest(
       "isDraft": $isDraft,
       "url": "https://github.com/$owner/$repository/pull/$number",
       "createdAt": "$createdAt",
+      "labels": { "nodes": [${labels.joinToString { (name, color) -> """{ "name": "$name", "color": "$color" }""" }}] },
       "repository": { "name": "$repository", "owner": { "login": "$owner" } },
       "timelineItems": { "nodes": [${timeline.joinToString()}] }
     }

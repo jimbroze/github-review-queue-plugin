@@ -1,5 +1,6 @@
 package com.jimbroze.reviewqueue.github
 
+import com.jimbroze.reviewqueue.queue.PullRequestLabel
 import com.jimbroze.reviewqueue.queue.PullRequestRef
 import com.jimbroze.reviewqueue.queue.RepositoryName
 import com.jimbroze.reviewqueue.queue.RequestedReviewer
@@ -214,6 +215,28 @@ class GitHubReviewSourceTest {
         val request = fetchSingle(pullRequest(author = null, timeline = listOf(requestedFromYou())))
 
         assertEquals("ghost", request.authorLogin)
+    }
+
+    @Test
+    fun `a pull request is listed with its labels and their colours in the order GitHub returned them`() {
+        val request = fetchSingle(
+            pullRequest(
+                labels = listOf("bug" to "d73a4a", "good first issue" to "7057ff"),
+                timeline = listOf(requestedFromYou()),
+            ),
+        )
+
+        assertEquals(
+            listOf(PullRequestLabel("bug", "d73a4a"), PullRequestLabel("good first issue", "7057ff")),
+            request.labels,
+        )
+    }
+
+    @Test
+    fun `a pull request without labels is listed with no labels`() {
+        val request = fetchSingle(pullRequest(timeline = listOf(requestedFromYou())))
+
+        assertEquals(emptyList<PullRequestLabel>(), request.labels)
     }
 
     private fun requestedFromYou() = reviewRequested("2026-01-02T10:00:00Z", user(you))

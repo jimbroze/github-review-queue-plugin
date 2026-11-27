@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.jimbroze.reviewqueue.queue.PullRequestLabel
 import com.jimbroze.reviewqueue.worktime.Urgency
 import icons.CollaborationToolsIcons
 import org.jetbrains.plugins.github.GithubIcons
@@ -51,6 +52,7 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
         cell.removeAll()
         addTitleLines(row, foreground, textWidth)
         addDetailLines(row, foreground, if (isHighlightedForSelection) foreground else urgencyColour(row.urgency), textWidth)
+        addLabelLine(row.labels)
         cell.background = UIUtil.getListBackground(selected, list.hasFocus())
         return cell
     }
@@ -124,6 +126,23 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
         }
     }
 
+    private fun addLabelLine(labels: List<PullRequestLabel>) {
+        if (labels.isEmpty()) return
+        val pills = labels.flatMap { listOf(labelPill(it), Box.createHorizontalStrut(JBUI.scale(LABEL_GAP))) }.dropLast(1)
+        cell.add(lineOf(Box.createHorizontalStrut(textIndent()), *pills.toTypedArray()))
+    }
+
+    private fun labelPill(label: PullRequestLabel): Component {
+        val colors = labelColorsFor(label.colorHex)
+        return JBLabel(label.name).apply {
+            font = JBFont.small()
+            foreground = Color(colors.text)
+            background = Color(colors.background)
+            isOpaque = true
+            border = JBUI.Borders.empty(0, 6)
+        }
+    }
+
     private fun widthOf(text: String, style: SimpleTextAttributes): Int {
         detailMeasurer.clear()
         detailMeasurer.append(text, style)
@@ -158,6 +177,7 @@ class ReviewRowRenderer : ListCellRenderer<ReviewRow> {
     private companion object {
         const val ICON_WIDTH = 16
         const val ICON_GAP = 6
+        const val LABEL_GAP = 4
         const val TITLE_MAX_LINES = 2
         const val SEPARATOR = " · "
         val detailStyle: SimpleTextAttributes = SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES

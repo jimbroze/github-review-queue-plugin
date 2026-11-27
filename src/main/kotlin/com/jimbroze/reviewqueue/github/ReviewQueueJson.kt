@@ -1,5 +1,6 @@
 package com.jimbroze.reviewqueue.github
 
+import com.jimbroze.reviewqueue.queue.PullRequestLabel
 import com.jimbroze.reviewqueue.queue.PullRequestRef
 import com.jimbroze.reviewqueue.queue.RepositoryName
 import com.jimbroze.reviewqueue.timeline.Reviewer
@@ -21,6 +22,7 @@ internal data class SearchedPullRequest(
     val isDraft: Boolean,
     val url: String,
     val createdAt: Instant,
+    val labels: List<PullRequestLabel>,
     val timeline: List<TimelineEvent>,
 )
 
@@ -53,6 +55,7 @@ private fun searchedPullRequest(pullRequest: JsonObject): SearchedPullRequest {
         isDraft = pullRequest.getValue("isDraft").jsonPrimitive.boolean,
         url = pullRequest.string("url"),
         createdAt = pullRequest.instant("createdAt"),
+        labels = pullRequest.obj("labels").nodes().map { PullRequestLabel(it.string("name"), it.string("color")) },
         timeline = pullRequest.obj("timelineItems").nodes().mapNotNull(::timelineEvent),
     )
 }

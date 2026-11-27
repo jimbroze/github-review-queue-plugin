@@ -1,5 +1,6 @@
 package com.jimbroze.reviewqueue.toolwindow
 
+import com.jimbroze.reviewqueue.queue.PullRequestLabel
 import com.jimbroze.reviewqueue.queue.PullRequestRef
 import com.jimbroze.reviewqueue.worktime.Urgency
 
@@ -33,4 +34,5 @@ data class ReviewRow(
     val isDraft: Boolean,
     val pullRequest: PullRequestRef,
     val url: String,
+    val labels: List<PullRequestLabel> = emptyList(),
 )

@@ -11,6 +11,8 @@ sealed interface RequestedReviewer {
     data class Team(val slug: String) : RequestedReviewer
 }
 
+data class PullRequestLabel(val name: String, val colorHex: String)
+
 data class ReviewRequest(
     val pullRequest: PullRequestRef,
     val title: String,
@@ -20,4 +22,5 @@ data class ReviewRequest(
     val requestedReviewer: RequestedReviewer,
     val isReReview: Boolean,
     val isDraft: Boolean,
+    val labels: List<PullRequestLabel> = emptyList(),
 )

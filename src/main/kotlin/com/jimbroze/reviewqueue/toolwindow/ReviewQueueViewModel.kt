@@ -122,6 +122,7 @@ class ReviewQueueViewModel(
             isDraft = request.isDraft,
             pullRequest = request.pullRequest,
             url = request.url,
+            labels = request.labels,
         )
     }
 
