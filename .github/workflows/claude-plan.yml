@@ -54,7 +54,7 @@ jobs:
           .github/scripts/collect-issue-conversation.sh > "$RUNNER_TEMP/claude-task/conversation.json"
           echo "last_comment_id=$(jq '[.comments[].id] | max // 0' "$RUNNER_TEMP/claude-task/conversation.json")" >> "$GITHUB_OUTPUT"
 
-      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1.0.259
+      - uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
