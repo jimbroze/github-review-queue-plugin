@@ -180,6 +180,20 @@ class GitHubReviewSourceTest {
     }
 
     @Test
+    fun `a pull request that search still returns after you submitted your review is not listed`() {
+        val result = fetch(
+            pullRequest(
+                timeline = listOf(
+                    reviewRequested("2026-01-02T10:00:00Z", user(you)),
+                    submittedReview("2026-01-03T10:00:00Z", author = you),
+                ),
+            ),
+        )
+
+        assertEquals(ReviewRequestsResult.Success(emptyList()), result)
+    }
+
+    @Test
     fun `pull requests assigned to you are left out of the search`() {
         val graphQl = fakeGitHub()
 

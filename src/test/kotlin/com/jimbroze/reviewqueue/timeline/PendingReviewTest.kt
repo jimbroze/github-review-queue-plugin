@@ -5,7 +5,9 @@ import com.jimbroze.reviewqueue.timeline.TimelineEvent.ReviewRequestRemoved
 import com.jimbroze.reviewqueue.timeline.TimelineEvent.ReviewRequested
 import com.jimbroze.reviewqueue.timeline.TimelineEvent.ReviewSubmitted
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -214,6 +216,27 @@ class PendingReviewTest {
         val timeline = listOf(requested(1, Reviewer.Team("Platform")))
 
         assertEquals(RequestedReviewer.Team("Platform"), pendingReviewFor(viewer, timeline)?.requestedReviewer)
+    }
+
+    @Test
+    fun `you have reviewed without an outstanding request after reviewing with no later request`() {
+        val timeline = listOf(requested(1, you), reviewed(2))
+
+        assertTrue(hasReviewedWithoutOutstandingRequest(viewer, timeline))
+    }
+
+    @Test
+    fun `you have not reviewed without an outstanding request when requested again after reviewing`() {
+        val timeline = listOf(requested(1, you), reviewed(2), requested(3, you))
+
+        assertFalse(hasReviewedWithoutOutstandingRequest(viewer, timeline))
+    }
+
+    @Test
+    fun `you have not reviewed without an outstanding request when you never reviewed`() {
+        val timeline = listOf(requested(1, someoneElse))
+
+        assertFalse(hasReviewedWithoutOutstandingRequest(viewer, timeline))
     }
 
     private fun time(minute: Int): Instant = Instant.parse("2026-01-01T00:00:00Z").plusSeconds(minute * 60L)

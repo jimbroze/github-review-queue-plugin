@@ -28,6 +28,12 @@ fun pendingReviewFor(viewer: Viewer, timeline: List<TimelineEvent>): PendingRevi
     )
 }
 
+fun hasReviewedWithoutOutstandingRequest(viewer: Viewer, timeline: List<TimelineEvent>): Boolean {
+    val events = timeline.sortedBy { it.at }
+    return events.any { it is ReviewSubmitted && viewer.isAuthorOf(it) } &&
+        outstandingRequests(viewer, events).isEmpty()
+}
+
 private data class OutstandingRequest(val reviewer: RequestedReviewer, val since: Instant)
 
 private fun outstandingRequests(viewer: Viewer, chronologicalEvents: List<TimelineEvent>): Collection<OutstandingRequest> {
