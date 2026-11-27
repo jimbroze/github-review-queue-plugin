@@ -5,6 +5,7 @@ import com.jimbroze.reviewqueue.queue.ReviewRequest
 import com.jimbroze.reviewqueue.queue.ReviewRequestsResult
 import com.jimbroze.reviewqueue.timeline.PendingReview
 import com.jimbroze.reviewqueue.timeline.Viewer
+import com.jimbroze.reviewqueue.timeline.hasReviewedWithoutOutstandingRequest
 import com.jimbroze.reviewqueue.timeline.pendingReviewFor
 
 class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
@@ -19,13 +20,16 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
             .answeredOr { return it }
         val viewer = Viewer(login.value, reviewQueue.value.teamSlugs)
         return ReviewRequestsResult.Success(
-            requests = reviewQueue.value.pullRequests.map { reviewRequest(it, viewer) },
+            requests = reviewQueue.value.pullRequests.mapNotNull { reviewRequest(it, viewer) },
             warnings = (login.warnings + reviewQueue.warnings).distinct(),
         )
     }
 
-    private fun reviewRequest(pullRequest: SearchedPullRequest, viewer: Viewer): ReviewRequest {
-        val pending = pendingReviewFor(viewer, pullRequest.timeline) ?: requestedSinceOpened(pullRequest)
+    // Search can lag behind the timeline: a PR the viewer just reviewed may still be returned.
+    private fun reviewRequest(pullRequest: SearchedPullRequest, viewer: Viewer): ReviewRequest? {
+        val pending = pendingReviewFor(viewer, pullRequest.timeline)
+            ?: if (hasReviewedWithoutOutstandingRequest(viewer, pullRequest.timeline)) return null
+            else requestedSinceOpened(pullRequest)
         return ReviewRequest(
             pullRequest = pullRequest.ref,
             title = pullRequest.title,
