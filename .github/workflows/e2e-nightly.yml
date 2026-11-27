@@ -5,13 +5,14 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   e2e:
     name: WebStorm ${{ matrix.ide }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -24,19 +25,23 @@ jobs:
       REVIEW_QUEUE_E2E_FORK: ${{ secrets.REVIEW_QUEUE_E2E_FORK }}
       REVIEW_QUEUE_E2E_IDE_LICENSE: ${{ secrets.REVIEW_QUEUE_E2E_IDE_LICENSE }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: |
             21
             25
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Run end-to-end tests
-        run: xvfb-run --auto-servernum ./gradlew integrationTest -Pe2eIde=${{ matrix.ide }}
+        env:
+          E2E_IDE: ${{ matrix.ide }}
+        run: xvfb-run --auto-servernum ./gradlew integrationTest "-Pe2eIde=$E2E_IDE"
       - name: Keep test reports and IDE logs
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-${{ matrix.ide }}
           path: |

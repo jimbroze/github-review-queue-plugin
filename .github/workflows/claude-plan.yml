@@ -6,10 +6,7 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-  id-token: write
+permissions: {}
 
 jobs:
   plan:
@@ -28,6 +25,10 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
     concurrency:
       group: claude-issue-${{ github.event.issue.number }}-${{ github.actor }}
       cancel-in-progress: false
@@ -39,7 +40,7 @@ jobs:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -53,12 +54,16 @@ jobs:
           .github/scripts/collect-issue-conversation.sh > "$RUNNER_TEMP/claude-task/conversation.json"
           echo "last_comment_id=$(jq '[.comments[].id] | max // 0' "$RUNNER_TEMP/claude-task/conversation.json")" >> "$GITHUB_OUTPUT"
 
-      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1.0.259
         id: claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            contents: read
+            pull_requests: read
           claude_args: |
             --permission-mode dontAsk
+            --max-turns 60
             --add-dir ${{ runner.temp }}/claude-task
             --allowedTools "Edit(/${{ runner.temp }}/claude-task/plan.md),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/plan.md)"
           prompt: |
