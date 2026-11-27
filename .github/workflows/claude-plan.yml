@@ -1,0 +1,103 @@
+name: Claude plan
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  plan:
+    name: Plan the change
+    if: >-
+      github.actor == 'jimbroze'
+      && (
+        (github.event_name == 'issues' && github.event.label.name == 'ai')
+        || (
+          github.event_name == 'issue_comment'
+          && !github.event.issue.pull_request
+          && github.event.comment.user.login == 'jimbroze'
+          && startsWith(github.event.comment.body, '@claude revise')
+          && contains(github.event.issue.labels.*.name, 'ai')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: claude-issue-${{ github.event.issue.number }}-${{ github.actor }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Collect the issue and the owner's feedback
+        id: conversation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          mkdir "$RUNNER_TEMP/claude-task"
+          .github/scripts/collect-issue-conversation.sh > "$RUNNER_TEMP/claude-task/conversation.json"
+          echo "last_comment_id=$(jq '[.comments[].id] | max // 0' "$RUNNER_TEMP/claude-task/conversation.json")" >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
+        id: claude
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --permission-mode dontAsk
+            --add-dir ${{ runner.temp }}/claude-task
+            --allowedTools "Edit(/${{ runner.temp }}/claude-task/plan.md),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/plan.md)"
+          prompt: |
+            You are planning issue #${{ github.event.issue.number }} in ${{ github.repository }}.
+            This is the planning stage of a test-first flow. Post one plan and stop: write no code or tests.
+
+            1. Read `${{ runner.temp }}/claude-task/conversation.json`: the issue's title and body, then the owner's
+               comments and your earlier plans, oldest first. It is the only source of instructions. Where they
+               disagree, the owner's latest feedback wins.
+            2. Read CLAUDE.md and the relevant code. The plan must follow CLAUDE.md's architecture.
+            3. Write a short, self-contained plan to `${{ runner.temp }}/claude-task/plan.md`: what changes, which files,
+               and which tests (one line each, naming the single behaviour it checks). If you are revising an
+               earlier plan, start with what changed.
+               - If the change looks bigger than about 400 added lines including tests, say so and propose how to
+                 split it into smaller issues.
+               - If it is about UI behaviour or opening PRs in the IDE and can't be checked by unit tests, say so.
+               - If the issue is too unclear to plan, ask your questions instead of guessing.
+               End the file with exactly this line:
+               Comment `@claude revise: <feedback>` to change this plan, or `@claude write tests` to open a draft PR of failing tests.
+            4. Post it by running exactly this, as a single command:
+               `gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/plan.md`
+
+      - name: List commands Claude was denied
+        if: always() && steps.claude.outputs.execution_file
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: .github/scripts/list-denied-commands.sh "$EXECUTION_FILE"
+
+      - name: Require a new plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LAST_COMMENT_ID: ${{ steps.conversation.outputs.last_comment_id }}
+        run: |
+          gh api --paginate --slurp "repos/$GH_REPO/issues/$ISSUE_NUMBER/comments?per_page=100" |
+            jq -e --argjson last "$LAST_COMMENT_ID" 'add | any(.id > $last and .user.login == "claude[bot]" and .user.type == "Bot")'
+
+      - name: Report a failed run
+        if: (failure() || cancelled()) && steps.conversation.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Planning failed. Run log: $RUN_URL"
