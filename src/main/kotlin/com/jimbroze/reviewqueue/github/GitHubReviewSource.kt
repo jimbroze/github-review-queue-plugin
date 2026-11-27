@@ -35,6 +35,7 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
             requestedReviewer = pending.requestedReviewer,
             isReReview = pending.isReReview,
             isDraft = pullRequest.isDraft,
+            labels = pullRequest.labels,
         )
     }
 
@@ -65,6 +66,7 @@ class GitHubReviewSource(private val graphQl: GitHubGraphQl) {
                     author { login }
                     url
                     createdAt
+                    labels(first: 20) { nodes { name color } }
                     repository { name owner { login } }
                     timelineItems(last: 100, itemTypes: [REVIEW_REQUESTED_EVENT, REVIEW_REQUEST_REMOVED_EVENT, PULL_REQUEST_REVIEW]) {
                       nodes {
