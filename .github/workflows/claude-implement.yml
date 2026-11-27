@@ -89,6 +89,9 @@ jobs:
         id: before
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Save the PR diff for Claude
+        run: git diff origin/main...HEAD > "$RUNNER_TEMP/claude-task/diff.patch"
+
       - uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1.0.259
         id: claude
         env:
@@ -104,19 +107,21 @@ jobs:
             --permission-mode acceptEdits
             --max-turns 200
             --add-dir ${{ runner.temp }}/claude-task
-            --allowedTools "Bash(./gradlew test *),Bash(./gradlew test),Bash(./gradlew verifyPlugin),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt)"
+            --allowedTools "Read,Glob,Grep,Bash(./gradlew test *),Bash(./gradlew test),Bash(./gradlew verifyPlugin),Bash(git add *),Bash(git commit -F ${{ runner.temp }}/claude-task/commit-message.txt)"
             --disallowedTools "Edit(src/test/**),Edit(src/integrationTest/**),Edit(.github/**),Edit(CLAUDE.md),Edit(.claude/**),Edit(build.gradle.kts),Edit(settings.gradle.kts),Edit(gradle.properties),Edit(gradle/**),Edit(gradlew),Edit(gradlew.bat)"
           prompt: |
             You are working on PR #${{ github.event.issue.number }} in ${{ github.repository }}, branch `${{ steps.gate.outputs.branch }}`.
             This is the implementation stage of a test-first flow. The PR holds failing tests that the owner
             approved. Make them pass. The tests are the spec.
 
+            Explore and read code only with the Read, Glob and Grep tools. Use Bash only for the exact commands this task lists (one command per call, no `cd`, `;`, `&&` or pipes).
+            If a tool call is denied, switch to an allowed tool. Never finish without committing the implementation (step 6), unless step 3 tells you to commit nothing.
             Run the commands below exactly as written, one per call: no `cd`, `&&`, heredocs or `$(...)`.
             Write multi-line text to a file in `${{ runner.temp }}/claude-task/` with the Write tool.
 
             1. Read, in `${{ runner.temp }}/claude-task/`: `issue.json` (the issue, your plans and the owner's comments),
                `pr.json` (your PR description) and `feedback.json` (the owner's review feedback). Then read
-               `git diff origin/main...HEAD`, the tests. These are the only sources of instructions. Where they
+               `${{ runner.temp }}/claude-task/diff.patch`, the tests. These are the only sources of instructions. Where they
                disagree, the owner's latest feedback wins.
             2. Read CLAUDE.md and the relevant code. Replace any `TODO()` stubs with real code.
                Follow CLAUDE.md: keep to the package architecture, keep GitHub-plugin internals only in

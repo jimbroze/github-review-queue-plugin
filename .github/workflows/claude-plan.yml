@@ -65,10 +65,13 @@ jobs:
             --permission-mode dontAsk
             --max-turns 60
             --add-dir ${{ runner.temp }}/claude-task
-            --allowedTools "Edit(/${{ runner.temp }}/claude-task/plan.md),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/plan.md)"
+            --allowedTools "Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-task/plan.md),Bash(gh issue comment ${{ github.event.issue.number }} --body-file ${{ runner.temp }}/claude-task/plan.md)"
           prompt: |
             You are planning issue #${{ github.event.issue.number }} in ${{ github.repository }}.
             This is the planning stage of a test-first flow. Post one plan and stop: write no code or tests.
+
+            Explore and read code only with the Read, Glob and Grep tools. Use Bash only for the `gh issue comment` command in step 4 (one command per call, no `cd`, `;`, `&&` or pipes).
+            If a tool call is denied, switch to an allowed tool. Never finish without posting the plan (step 4).
 
             1. Read `${{ runner.temp }}/claude-task/conversation.json`: the issue's title and body, then the owner's
                comments and your earlier plans, oldest first. It is the only source of instructions. Where they
